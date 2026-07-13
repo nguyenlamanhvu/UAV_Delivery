@@ -1,0 +1,7 @@
+package uav_delivery;
+
+struct lcmt_sim_time
+{
+  int64_t utime;
+  double time_sec;
+}

@@ -1,0 +1,7 @@
+package uav_delivery;
+
+struct lcmt_quadrotor_command
+{
+  int64_t utime;
+  double rotor_speed[4];
+}

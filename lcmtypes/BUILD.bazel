@@ -1,0 +1,45 @@
+load("@lcm//lcm-bazel:lcm_cc_library_srcs.bzl", "lcm_cc_library_srcs")
+load("@lcm//lcm-bazel:lcm_java_library_srcs.bzl", "lcm_java_library_srcs")
+load("@lcm//lcm-bazel:lcm_library.bzl", "lcm_library")
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_java//java:defs.bzl", "java_binary", "java_library")
+
+package(default_visibility = ["//visibility:public"])
+
+lcm_library(
+    name = "lcm_messages",
+    srcs = glob(["*.lcm"]),
+    lcm_package = "uav_delivery",
+)
+
+lcm_cc_library_srcs(
+    name = "uav_lcmtypes_srcs",
+    src = ":lcm_messages",
+)
+
+cc_library(
+    name = "uav_lcmtypes",
+    srcs = [":uav_lcmtypes_srcs"],
+    includes = ["."],
+    deps = ["@lcm//lcm:lcm-coretypes"],
+)
+
+lcm_java_library_srcs(
+    name = "uav_lcmtypes_java_srcs",
+    src = ":lcm_messages",
+)
+
+java_library(
+    name = "uav_lcmtypes_java",
+    srcs = [":uav_lcmtypes_java_srcs"],
+    deps = ["@lcm//lcm-java:lcm-java"],
+)
+
+java_binary(
+    name = "uav-lcm-spy",
+    main_class = "lcm.spy.Spy",
+    runtime_deps = [
+        ":uav_lcmtypes_java",
+        "@lcm//lcm-java:lcm-java",
+    ],
+)

@@ -1,0 +1,47 @@
+module(name = "uav_delivery")
+
+bazel_dep(name = "rules_cc", version = "0.2.17")
+bazel_dep(name = "rules_java", version = "9.6.1")
+bazel_dep(name = "gflags", version = "2.2.2.bcr.1")
+bazel_dep(name = "lcm")
+bazel_dep(name = "drake")
+
+git_override(
+    module_name = "lcm",
+    commit = "98f5403a8018d427c43482a4efe5760e6f54ea4e",
+    remote = "https://github.com/lcm-proj/lcm.git",
+)
+
+drake_dep_repositories = use_extension(
+    "@drake//tools/workspace:default.bzl",
+    "drake_dep_repositories",
+)
+
+use_repo(
+    drake_dep_repositories,
+    "blas",
+    "drake_models",
+    "eigen",
+    "fmt",
+    "glib",
+    "lapack",
+    "meshcat",
+    "opencl",
+    "pybind11",
+    "spdlog",
+    "zlib",
+)
+
+DRAKE_VERSION = "v1.51.1"
+DRAKE_CHECKSUM = "40cb4d0e3d378ba67c21aca8cc1396399774b333b12d0030f5fbe4ddff1dc786"
+
+archive_override(
+    module_name = "drake",
+    sha256 = DRAKE_CHECKSUM,
+    strip_prefix = "drake-{}".format(DRAKE_VERSION.lstrip("v")),
+    urls = [
+        "https://github.com/RobotLocomotion/drake/archive/{}.tar.gz".format(
+            DRAKE_VERSION
+        ),
+    ],
+)

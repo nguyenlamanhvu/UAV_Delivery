@@ -1,0 +1,89 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "quadrotor_params",
+    srcs = ["params/quadrotor_params.cc"],
+    hdrs = ["params/quadrotor_params.h"],
+    deps = [
+        "@drake//common/yaml:yaml_read_archive",
+    ],
+)
+
+cc_library(
+    name = "quadrotor_plant",
+    srcs = ["systems/quadrotor_plant.cc"],
+    hdrs = ["systems/quadrotor_plant.h"],
+    deps = [
+        ":quadrotor_params",
+        "@drake//systems/framework",
+    ],
+)
+
+cc_library(
+    name = "quadrotor_lcm_systems",
+    srcs = ["systems/lcm_systems.cc"],
+    hdrs = ["systems/lcm_systems.h"],
+    deps = [
+        ":quadrotor_params",
+        "//lcmtypes:uav_lcmtypes",
+        "@drake//systems/framework",
+    ],
+)
+
+cc_library(
+    name = "quadrotor_hover_controller_lib",
+    srcs = ["systems/hover_controller.cc"],
+    hdrs = ["systems/hover_controller.h"],
+    deps = [
+        ":quadrotor_params",
+        "@drake//systems/framework",
+    ],
+)
+
+cc_library(
+    name = "quadrotor_sim_utils",
+    srcs = ["systems/sim_utils.cc"],
+    hdrs = ["systems/sim_utils.h"],
+    deps = [
+        "@drake//systems/framework",
+    ],
+)
+
+cc_binary(
+    name = "quadrotor_sim",
+    srcs = ["src/quadrotor_sim.cc"],
+    data = ["config/quadrotor_sim.yaml"],
+    deps = [
+        ":quadrotor_lcm_systems",
+        ":quadrotor_params",
+        ":quadrotor_plant",
+        ":quadrotor_sim_utils",
+        "//lcmtypes:uav_lcmtypes",
+        "@drake//common/yaml:yaml_io",
+        "@drake//systems/analysis:simulator",
+        "@drake//systems/framework",
+        "@drake//systems/lcm",
+        "@gflags//:gflags",
+    ],
+)
+
+cc_binary(
+    name = "quadrotor_hover_controller",
+    srcs = ["src/quadrotor_hover_controller.cc"],
+    data = ["config/quadrotor_sim.yaml"],
+    deps = [
+        ":quadrotor_hover_controller_lib",
+        ":quadrotor_lcm_systems",
+        ":quadrotor_params",
+        ":quadrotor_sim_utils",
+        "//lcmtypes:uav_lcmtypes",
+        "@drake//common/yaml:yaml_io",
+        "@gflags//:gflags",
+        "@drake//systems/analysis:simulator",
+        "@drake//systems/framework",
+        "@drake//systems/lcm",
+    ],
+)

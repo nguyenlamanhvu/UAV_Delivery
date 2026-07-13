@@ -1,0 +1,12 @@
+build -c opt
+build --cxxopt=-std=c++20
+build --host_cxxopt=-std=c++20
+
+# Release build profile
+build:release -c opt
+build:release --copt=-march=native
+build:release --copt=-O3
+build:release --strip=always
+build:release --define=WITH_SNOPT=OFF
+build:release --define=WITH_GUROBI=OFF
+build:release --define=NO_CLARABEL=ON
