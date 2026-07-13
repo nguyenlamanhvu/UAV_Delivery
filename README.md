@@ -34,6 +34,12 @@ bazel --batch build --config=release --jobs=12 //:quadrotor_sim //:quadrotor_hov
 
 The repo uses Drake v1.51.1 through Bzlmod in `MODULE.bazel`.
 
+## License
+
+Copyright 2026 Nguyen Lam Anh Vu.
+
+Licensed under the Apache License, Version 2.0. See `LICENSE`.
+
 ## Run
 
 Terminal 1, start the plant simulation:
