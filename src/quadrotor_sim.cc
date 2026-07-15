@@ -74,6 +74,7 @@ int DoMain(int argc, char* argv[]) {
   quad_context.SetContinuousState(MakeInitialStateVector(params.initial_state));
 
   std::cout << "Quadrotor sim config: " << FLAGS_config << "\n";
+  std::cout << "Model: " << params.model << "\n";
   std::cout << "Publishing state on " << params.lcm_channels.state
             << " and sim time on " << params.lcm_channels.sim_time << "\n";
   std::cout << "Receiving rotor commands on " << params.lcm_channels.command

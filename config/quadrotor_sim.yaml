@@ -1,11 +1,13 @@
+model: UAV_models/skydio_2/quadrotor.urdf
+
 plant:
-  mass: 1.2
+  mass: 0.775
   gravity: 9.81
   arm_length: 0.22
   thrust_coeff: 1.0e-5
   yaw_moment_coeff: 1.6e-7
   max_rotor_speed: 1200.0
-  inertia: [0.018, 0.018, 0.032]
+  inertia: [0.0015, 0.0025, 0.0035]
 
 initial_state:
   position: [0.0, 0.0, 1.0]

@@ -75,6 +75,7 @@ struct QuadrotorHoverControllerParams {
 };
 
 struct QuadrotorSimParams {
+  std::string model{"UAV_models/skydio_2/quadrotor.urdf"};
   QuadrotorParams plant;
   QuadrotorInitialState initial_state;
   QuadrotorLcmChannels lcm_channels;
@@ -87,6 +88,7 @@ struct QuadrotorSimParams {
 
   template <typename Archive>
   void Serialize(Archive* a) {
+    a->Visit(DRAKE_NVP(model));
     a->Visit(DRAKE_NVP(plant));
     a->Visit(DRAKE_NVP(initial_state));
     a->Visit(DRAKE_NVP(lcm_channels));

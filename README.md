@@ -10,11 +10,13 @@ message types.
 
 - `src/quadrotor_sim.cc`: quadrotor plant simulation process.
 - `src/quadrotor_hover_controller.cc`: state-driven hover controller process.
+- `src/quadrotor_visualizer.cc`: Meshcat visualizer process for the URDF model.
 - `systems/quadrotor_plant.*`: 12-state quadrotor dynamics.
 - `systems/hover_controller.*`: controller LeafSystem.
 - `systems/lcm_systems.*`: LCM message receiver/sender systems.
 - `params/quadrotor_params.*`: YAML-serializable parameters.
-- `config/quadrotor_sim.yaml`: default plant, controller, channel, and runtime
+- `UAV_models/`: Skydio quadrotor URDF and mesh assets.
+- `config/quadrotor_sim.yaml`: default model, plant, controller, channel, and runtime
   configuration.
 - `lcmtypes/*.lcm`: custom UAV LCM messages and repo-local `uav-lcm-spy`.
 
@@ -23,13 +25,13 @@ message types.
 Regular build:
 
 ```bash
-bazel --batch build --jobs=12 //:quadrotor_sim //:quadrotor_hover_controller //lcmtypes:uav-lcm-spy
+bazel --batch build --jobs=12 //:quadrotor_sim //:quadrotor_hover_controller //:quadrotor_visualizer //lcmtypes:uav-lcm-spy
 ```
 
 Release build:
 
 ```bash
-bazel --batch build --config=release --jobs=12 //:quadrotor_sim //:quadrotor_hover_controller //lcmtypes:uav-lcm-spy
+bazel --batch build --config=release --jobs=12 //:quadrotor_sim //:quadrotor_hover_controller //:quadrotor_visualizer //lcmtypes:uav-lcm-spy
 ```
 
 The repo uses Drake v1.51.1 through Bzlmod in `MODULE.bazel`.
@@ -60,6 +62,12 @@ Terminal 3, inspect LCM:
 bazel run //lcmtypes:uav-lcm-spy
 ```
 
+Optional terminal 4, visualize the URDF in Meshcat:
+
+```bash
+bazel run //:quadrotor_visualizer
+```
+
 Use the repo-local spy above so Java has the generated
 `uav_delivery.lcmt_*` classes on its classpath. A system `lcm-spy` may see the
 channels but mark them undecodable.
@@ -78,12 +86,14 @@ The current process graph is:
 quadrotor_sim -> UAV_QUADROTOR_STATE
 quadrotor_hover_controller -> UAV_QUADROTOR_COMMAND
 quadrotor_sim -> UAV_SIM_TIME
+quadrotor_visualizer subscribes UAV_QUADROTOR_STATE and renders the URDF in Meshcat
 ```
 
 ## Configuration
 
 Most tuning lives in `config/quadrotor_sim.yaml`:
 
+- Model path: Skydio URDF used by the visualizer and shared process config.
 - Plant parameters: mass, gravity, arm length, thrust/yaw coefficients, inertia.
 - Initial state: position, RPY, linear velocity, body angular velocity.
 - Hover controller gains: desired altitude, attitude gains, altitude gains.

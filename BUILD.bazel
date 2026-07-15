@@ -50,12 +50,18 @@ cc_library(
     deps = [
         "@drake//systems/framework",
     ],
+    data = [
+        "//UAV_models:uav_files",
+    ],
 )
 
 cc_binary(
     name = "quadrotor_sim",
     srcs = ["src/quadrotor_sim.cc"],
-    data = ["config/quadrotor_sim.yaml"],
+    data = [
+        "config/quadrotor_sim.yaml",
+        "//UAV_models:uav_files",
+    ],
     deps = [
         ":quadrotor_lcm_systems",
         ":quadrotor_params",
@@ -85,5 +91,23 @@ cc_binary(
         "@drake//systems/analysis:simulator",
         "@drake//systems/framework",
         "@drake//systems/lcm",
+    ],
+)
+
+cc_binary(
+    name = "quadrotor_visualizer",
+    srcs = ["src/quadrotor_visualizer.cc"],
+    data = [
+        "config/quadrotor_sim.yaml",
+        "//UAV_models:uav_files",
+    ],
+    deps = [
+        ":quadrotor_lcm_systems",
+        ":quadrotor_params",
+        ":quadrotor_sim_utils",
+        "//lcmtypes:uav_lcmtypes",
+        "@drake//:drake_shared_library",
+        "@drake//common/yaml:yaml_io",
+        "@gflags//:gflags",
     ],
 )
