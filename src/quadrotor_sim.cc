@@ -11,6 +11,7 @@
 #include "drake/systems/lcm/lcm_publisher_system.h"
 #include "drake/systems/lcm/lcm_subscriber_system.h"
 #include "params/quadrotor_params.h"
+#include "systems/diagram_utils.h"
 #include "systems/lcm_systems.h"
 #include "systems/quadrotor_plant.h"
 #include "systems/sim_utils.h"
@@ -23,6 +24,7 @@ DEFINE_string(config, "config/quadrotor_sim.yaml",
 DEFINE_string(lcm_url,
               "udpm://239.255.76.67:7667?ttl=0",
               "LCM URL for this instance");
+DEFINE_string(diagram_svg, "", "Optional path to write the system diagram SVG.");
 
 namespace uav_delivery {
 namespace {
@@ -69,6 +71,7 @@ int DoMain(int argc, char* argv[]) {
   builder.AddSystem<systems::SimTerminator>();
 
   auto diagram = builder.Build();
+  systems::MaybeWriteDiagramSvg(*diagram, FLAGS_diagram_svg);
   auto context = diagram->CreateDefaultContext();
   auto& quad_context = diagram->GetMutableSubsystemContext(*quadrotor, context.get());
   quad_context.SetContinuousState(MakeInitialStateVector(params.initial_state));
@@ -77,8 +80,8 @@ int DoMain(int argc, char* argv[]) {
   std::cout << "Model: " << params.model << "\n";
   std::cout << "Publishing state on " << params.lcm_channels.state
             << " and sim time on " << params.lcm_channels.sim_time << "\n";
-  std::cout << "Receiving rotor commands on " << params.lcm_channels.command
-            << " as lcmt_quadrotor_command [w1,w2,w3,w4] rad/s\n";
+  std::cout << "Receiving propeller inputs on " << params.lcm_channels.command
+            << " as lcmt_quadrotor_command [u1,u2,u3,u4]\n";
   std::cout << "Debug with: drake-lcm-spy or lcm-spy" << std::endl;
 
   drake::systems::Simulator<double> simulator(*diagram, std::move(context));

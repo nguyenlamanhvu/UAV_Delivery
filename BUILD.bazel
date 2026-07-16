@@ -29,16 +29,18 @@ cc_library(
     deps = [
         ":quadrotor_params",
         "//lcmtypes:uav_lcmtypes",
+        "@drake//math",
         "@drake//systems/framework",
     ],
 )
 
 cc_library(
-    name = "quadrotor_hover_controller_lib",
-    srcs = ["systems/hover_controller.cc"],
-    hdrs = ["systems/hover_controller.h"],
+    name = "quadrotor_se3_controller_lib",
+    srcs = ["systems/se3_controller.cc"],
+    hdrs = ["systems/se3_controller.h"],
     deps = [
         ":quadrotor_params",
+        "//lcmtypes:uav_lcmtypes",
         "@drake//systems/framework",
     ],
 )
@@ -55,6 +57,25 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "diagram_utils",
+    srcs = ["systems/diagram_utils.cc"],
+    hdrs = ["systems/diagram_utils.h"],
+    deps = [
+        "@drake//systems/framework",
+    ],
+)
+
+cc_library(
+    name = "lcm_driven_loop",
+    hdrs = ["systems/lcm_driven_loop.h"],
+    deps = [
+        "@drake//lcm",
+        "@drake//systems/analysis:simulator",
+        "@drake//systems/framework",
+    ],
+)
+
 cc_binary(
     name = "quadrotor_sim",
     srcs = ["src/quadrotor_sim.cc"],
@@ -63,6 +84,7 @@ cc_binary(
         "//UAV_models:uav_files",
     ],
     deps = [
+        ":diagram_utils",
         ":quadrotor_lcm_systems",
         ":quadrotor_params",
         ":quadrotor_plant",
@@ -77,16 +99,18 @@ cc_binary(
 )
 
 cc_binary(
-    name = "quadrotor_hover_controller",
-    srcs = ["src/quadrotor_hover_controller.cc"],
+    name = "quadrotor_se3_controller",
+    srcs = ["src/quadrotor_se3_controller.cc"],
     data = ["config/quadrotor_sim.yaml"],
     deps = [
-        ":quadrotor_hover_controller_lib",
-        ":quadrotor_lcm_systems",
+        ":diagram_utils",
+        ":lcm_driven_loop",
+        ":quadrotor_se3_controller_lib",
         ":quadrotor_params",
         ":quadrotor_sim_utils",
         "//lcmtypes:uav_lcmtypes",
         "@drake//common/yaml:yaml_io",
+        "@drake//lcm",
         "@gflags//:gflags",
         "@drake//systems/analysis:simulator",
         "@drake//systems/framework",
@@ -102,6 +126,7 @@ cc_binary(
         "//UAV_models:uav_files",
     ],
     deps = [
+        ":diagram_utils",
         ":quadrotor_lcm_systems",
         ":quadrotor_params",
         ":quadrotor_sim_utils",

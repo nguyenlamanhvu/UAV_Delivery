@@ -13,7 +13,6 @@
 #include "drake/geometry/meshcat_visualizer_params.h"
 #include "drake/geometry/scene_graph.h"
 #include "drake/math/rigid_transform.h"
-#include "drake/math/roll_pitch_yaw.h"
 #include "drake/multibody/parsing/parser.h"
 #include "drake/multibody/plant/multibody_plant.h"
 #include "drake/systems/analysis/simulator.h"
@@ -25,6 +24,7 @@
 #include "drake/systems/lcm/lcm_subscriber_system.h"
 #include "drake/systems/rendering/multibody_position_to_geometry_pose.h"
 #include "params/quadrotor_params.h"
+#include "systems/diagram_utils.h"
 #include "systems/lcm_systems.h"
 #include "systems/sim_utils.h"
 #include "uav_delivery/lcmt_quadrotor_state.hpp"
@@ -36,6 +36,7 @@ DEFINE_string(lcm_url,
               "LCM URL for this instance");
 DEFINE_int32(meshcat_port, 7000, "Port for Meshcat server.");
 DEFINE_double(visualizer_publish_rate, 60.0, "Meshcat publish rate in Hz.");
+DEFINE_string(diagram_svg, "", "Optional path to write the system diagram SVG.");
 
 namespace uav_delivery {
 namespace {
@@ -48,7 +49,7 @@ class QuadrotorStateToPosition final : public drake::systems::LeafSystem<double>
         body_(plant.GetBodyByName("base_link")),
         plant_context_(plant.CreateDefaultContext()) {
     state_port_ = this->DeclareVectorInputPort(
-        "quadrotor_state", drake::systems::BasicVector<double>(12))
+        "quadrotor_state", drake::systems::BasicVector<double>(18))
                       .get_index();
     this->DeclareVectorOutputPort(
         "q", drake::systems::BasicVector<double>(plant.num_positions()),
@@ -59,9 +60,10 @@ class QuadrotorStateToPosition final : public drake::systems::LeafSystem<double>
   void CalcPositions(const drake::systems::Context<double>& context,
                      drake::systems::BasicVector<double>* output) const {
     const Eigen::VectorXd state = this->get_input_port(state_port_).Eval(context);
+    const Eigen::Map<const Eigen::Matrix<double, 3, 3, Eigen::RowMajor>> R(
+        state.data() + 6);
     const drake::math::RigidTransform<double> X_WB(
-        drake::math::RollPitchYaw<double>(state.segment<3>(3)),
-        state.segment<3>(0));
+        drake::math::RotationMatrix<double>(R), state.segment<3>(0));
     plant_.SetFreeBodyPose(plant_context_.get(), body_, X_WB);
     output->SetFromVector(plant_.GetPositions(*plant_context_));
   }
@@ -114,6 +116,7 @@ int DoMain(int argc, char* argv[]) {
   builder.AddSystem<systems::SimTerminator>();
 
   auto diagram = builder.Build();
+  systems::MaybeWriteDiagramSvg(*diagram, FLAGS_diagram_svg);
   auto context = diagram->CreateDefaultContext();
 
   std::cout << "Quadrotor visualizer config: " << FLAGS_config << "\n";

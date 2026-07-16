@@ -9,13 +9,13 @@
 namespace uav_delivery {
 
 struct QuadrotorParams {
-  double mass{1.2};
+  double mass{0.775};
   double gravity{9.81};
-  double arm_length{0.22};
-  double thrust_coeff{1.0e-5};
-  double yaw_moment_coeff{1.6e-7};
-  double max_rotor_speed{1200.0};
-  Eigen::Vector3d inertia{0.018, 0.018, 0.032};
+  double arm_length{0.15};
+  double thrust_coeff{1.0};
+  double yaw_moment_coeff{1.0e-2};
+  double max_rotor_input{5.0};
+  Eigen::Vector3d inertia{0.0015, 0.0025, 0.0035};
 
   template <typename Archive>
   void Serialize(Archive* a) {
@@ -24,7 +24,7 @@ struct QuadrotorParams {
     a->Visit(DRAKE_NVP(arm_length));
     a->Visit(DRAKE_NVP(thrust_coeff));
     a->Visit(DRAKE_NVP(yaw_moment_coeff));
-    a->Visit(DRAKE_NVP(max_rotor_speed));
+    a->Visit(DRAKE_NVP(max_rotor_input));
     a->Visit(DRAKE_NVP(inertia));
   }
 };
@@ -57,20 +57,24 @@ struct QuadrotorLcmChannels {
   }
 };
 
-struct QuadrotorHoverControllerParams {
-  double desired_z{1.0};
-  Eigen::Vector3d kp_rpy{3.0, 3.0, 1.2};
-  Eigen::Vector3d kd_angular{0.35, 0.35, 0.18};
-  double kp_z{2.0};
-  double kd_z{0.8};
+struct QuadrotorSe3ControllerParams {
+  Eigen::Vector3d desired_position{0.0, 0.0, 1.0};
+  Eigen::Vector3d desired_velocity{0.0, 0.0, 0.0};
+  double desired_yaw{0.0};
+  double kp_position{4.0};
+  double kd_position{3.0};
+  double kp_rotation{1.5};
+  double kd_angular{0.3};
 
   template <typename Archive>
   void Serialize(Archive* a) {
-    a->Visit(DRAKE_NVP(desired_z));
-    a->Visit(DRAKE_NVP(kp_rpy));
+    a->Visit(DRAKE_NVP(desired_position));
+    a->Visit(DRAKE_NVP(desired_velocity));
+    a->Visit(DRAKE_NVP(desired_yaw));
+    a->Visit(DRAKE_NVP(kp_position));
+    a->Visit(DRAKE_NVP(kd_position));
+    a->Visit(DRAKE_NVP(kp_rotation));
     a->Visit(DRAKE_NVP(kd_angular));
-    a->Visit(DRAKE_NVP(kp_z));
-    a->Visit(DRAKE_NVP(kd_z));
   }
 };
 
@@ -79,7 +83,7 @@ struct QuadrotorSimParams {
   QuadrotorParams plant;
   QuadrotorInitialState initial_state;
   QuadrotorLcmChannels lcm_channels;
-  QuadrotorHoverControllerParams hover_controller;
+  QuadrotorSe3ControllerParams se3_controller;
   double publish_rate{100.0};
   double realtime_rate{1.0};
   double sim_time{10.0};
@@ -92,7 +96,7 @@ struct QuadrotorSimParams {
     a->Visit(DRAKE_NVP(plant));
     a->Visit(DRAKE_NVP(initial_state));
     a->Visit(DRAKE_NVP(lcm_channels));
-    a->Visit(DRAKE_NVP(hover_controller));
+    a->Visit(DRAKE_NVP(se3_controller));
     a->Visit(DRAKE_NVP(publish_rate));
     a->Visit(DRAKE_NVP(realtime_rate));
     a->Visit(DRAKE_NVP(sim_time));
@@ -102,7 +106,5 @@ struct QuadrotorSimParams {
 };
 
 Eigen::VectorXd MakeInitialStateVector(const QuadrotorInitialState& initial_state);
-
-double CalcHoverRotorSpeed(const QuadrotorParams& params);
 
 }  // namespace uav_delivery

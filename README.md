@@ -9,10 +9,13 @@ message types.
 ## Layout
 
 - `src/quadrotor_sim.cc`: quadrotor plant simulation process.
-- `src/quadrotor_hover_controller.cc`: state-driven hover controller process.
+- `src/quadrotor_se3_controller.cc`: state-driven SE(3) controller process.
 - `src/quadrotor_visualizer.cc`: Meshcat visualizer process for the URDF model.
-- `systems/quadrotor_plant.*`: 12-state quadrotor dynamics.
-- `systems/hover_controller.*`: controller LeafSystem.
+- `systems/quadrotor_plant.*`: 18-state SE(3) quadrotor dynamics.
+- `systems/se3_controller.*`: geometric SE(3) controller LeafSystem with LCM
+  message input/output ports.
+- `systems/lcm_driven_loop.h`: dairlib-style LCM-driven execution loop.
+- `systems/diagram_utils.*`: optional Graphviz SVG export for process diagrams.
 - `systems/lcm_systems.*`: LCM message receiver/sender systems.
 - `params/quadrotor_params.*`: YAML-serializable parameters.
 - `UAV_models/`: Skydio quadrotor URDF and mesh assets.
@@ -25,13 +28,13 @@ message types.
 Regular build:
 
 ```bash
-bazel --batch build --jobs=12 //:quadrotor_sim //:quadrotor_hover_controller //:quadrotor_visualizer //lcmtypes:uav-lcm-spy
+bazel --batch build --jobs=12 //:quadrotor_sim //:quadrotor_se3_controller //:quadrotor_visualizer //lcmtypes:uav-lcm-spy
 ```
 
 Release build:
 
 ```bash
-bazel --batch build --config=release --jobs=12 //:quadrotor_sim //:quadrotor_hover_controller //:quadrotor_visualizer //lcmtypes:uav-lcm-spy
+bazel --batch build --config=release --jobs=12 //:quadrotor_sim //:quadrotor_se3_controller //:quadrotor_visualizer //lcmtypes:uav-lcm-spy
 ```
 
 The repo uses Drake v1.51.1 through Bzlmod in `MODULE.bazel`.
@@ -50,10 +53,10 @@ Terminal 1, start the plant simulation:
 bazel run //:quadrotor_sim
 ```
 
-Terminal 2, start the hover controller:
+Terminal 2, start the SE(3) controller:
 
 ```bash
-bazel run //:quadrotor_hover_controller
+bazel run //:quadrotor_se3_controller
 ```
 
 Terminal 3, inspect LCM:
@@ -67,6 +70,17 @@ Optional terminal 4, visualize the URDF in Meshcat:
 ```bash
 bazel run //:quadrotor_visualizer
 ```
+
+Export a process diagram SVG while starting any binary:
+
+```bash
+bazel run //:quadrotor_sim -- --diagram_svg=/tmp/quadrotor_sim.svg
+bazel run //:quadrotor_se3_controller -- --diagram_svg=/tmp/quadrotor_controller.svg
+bazel run //:quadrotor_visualizer -- --diagram_svg=/tmp/quadrotor_visualizer.svg
+```
+
+This uses Graphviz `dot`. If `dot` is not installed, the binary still writes a
+`.dot` file next to the requested SVG path.
 
 Use the repo-local spy above so Java has the generated
 `uav_delivery.lcmt_*` classes on its classpath. A system `lcm-spy` may see the
@@ -84,10 +98,15 @@ The current process graph is:
 
 ```text
 quadrotor_sim -> UAV_QUADROTOR_STATE
-quadrotor_hover_controller -> UAV_QUADROTOR_COMMAND
+quadrotor_se3_controller -> UAV_QUADROTOR_COMMAND
 quadrotor_sim -> UAV_SIM_TIME
 quadrotor_visualizer subscribes UAV_QUADROTOR_STATE and renders the URDF in Meshcat
 ```
+
+The SE(3) controller is driven by `UAV_QUADROTOR_STATE`: it waits for a new
+state message, fixes that LCM message directly into the controller diagram,
+advances to the message timestamp, and then force-publishes one
+`UAV_QUADROTOR_COMMAND`.
 
 ## Configuration
 
@@ -95,8 +114,8 @@ Most tuning lives in `config/quadrotor_sim.yaml`:
 
 - Model path: Skydio URDF used by the visualizer and shared process config.
 - Plant parameters: mass, gravity, arm length, thrust/yaw coefficients, inertia.
-- Initial state: position, RPY, linear velocity, body angular velocity.
-- Hover controller gains: desired altitude, attitude gains, altitude gains.
+- Initial state: position, initial RPY used to seed `R`, linear velocity, body angular velocity.
+- SE(3) controller gains: desired position/velocity/yaw and geometric PD gains.
 - Runtime settings: publish rate, realtime rate, sim time, console logging.
 
 `lcm_url` is intentionally a command-line flag, not YAML:
@@ -107,10 +126,10 @@ bazel run //:quadrotor_sim -- --lcm_url="udpm://239.255.76.67:7667?ttl=0"
 
 ## Debug Notes
 
-With no controller running, the simulation receives zero rotor command and the
-UAV should fall from its initial `z = 1.0`. With the hover controller running,
-the controller subscribes to state and publishes rotor speeds to hold the target
-altitude.
+With no controller running, the simulation receives zero propeller input and the
+UAV should fall from its initial `z = 1.0`. With the SE(3) controller running,
+the controller subscribes to state and publishes four propeller inputs to hold
+the target pose.
 
 To make controller action obvious, edit the YAML, for example:
 
@@ -123,6 +142,6 @@ initial_state:
 or:
 
 ```yaml
-hover_controller:
-  desired_z: 1.5
+se3_controller:
+  desired_position: [0.0, 0.0, 1.5]
 ```

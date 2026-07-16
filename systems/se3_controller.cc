@@ -1,0 +1,111 @@
+#include "systems/se3_controller.h"
+
+#include <algorithm>
+#include <cmath>
+#include <utility>
+
+#include "drake/common/value.h"
+#include "uav_delivery/lcmt_quadrotor_state.hpp"
+
+namespace uav_delivery {
+namespace systems {
+
+Se3Controller::Se3Controller(QuadrotorSimParams params)
+    : params_(std::move(params)) {
+  state_port_ = this->DeclareAbstractInputPort(
+      "quadrotor_state", drake::Value<lcmt_quadrotor_state>{})
+                    .get_index();
+  this->DeclareAbstractOutputPort("lcmt_quadrotor_command",
+                                  &Se3Controller::CalcCommand);
+}
+
+void Se3Controller::CalcCommand(
+    const drake::systems::Context<double>& context,
+    lcmt_quadrotor_command* output) const {
+  const auto& state =
+      this->get_input_port(state_port_).Eval<lcmt_quadrotor_state>(context);
+  Eigen::Vector3d p;
+  Eigen::Vector3d v;
+  Eigen::Matrix3d R;
+  Eigen::Vector3d omega_B;
+  for (int i = 0; i < 3; ++i) {
+    p(i) = state.position[i];
+    v(i) = state.velocity[i];
+    omega_B(i) = state.body_angular_velocity[i];
+  }
+  for (int i = 0; i < 9; ++i) {
+    R(i / 3, i % 3) = state.rotation[i];
+  }
+
+  const Eigen::Vector3d ep = p - params_.se3_controller.desired_position;
+  const Eigen::Vector3d ev = v - params_.se3_controller.desired_velocity;
+  const Eigen::Vector3d e3 = Eigen::Vector3d::UnitZ();
+
+  Eigen::Vector3d desired_force =
+      -params_.se3_controller.kp_position * ep -
+      params_.se3_controller.kd_position * ev +
+      params_.plant.mass * params_.plant.gravity * e3;
+  if (desired_force.norm() < 1e-9) {
+    desired_force = params_.plant.mass * params_.plant.gravity * e3;
+  }
+
+  const Eigen::Vector3d b3d = desired_force.normalized();
+  const Eigen::Vector3d b1d(std::cos(params_.se3_controller.desired_yaw),
+                            std::sin(params_.se3_controller.desired_yaw), 0.0);
+  Eigen::Vector3d b2d = b3d.cross(b1d);
+  if (b2d.norm() < 1e-9) {
+    b2d = Eigen::Vector3d::UnitY();
+  } else {
+    b2d.normalize();
+  }
+
+  Eigen::Matrix3d Rd;
+  Rd.col(0) = b2d.cross(b3d);
+  Rd.col(1) = b2d;
+  Rd.col(2) = b3d;
+
+  const Eigen::Vector3d eR = 0.5 * Vee(Rd.transpose() * R - R.transpose() * Rd);
+  const Eigen::Vector3d eW = omega_B;
+  const Eigen::Matrix3d J = params_.plant.inertia.asDiagonal();
+  const double thrust = desired_force.dot(R * e3);
+  const Eigen::Vector3d moment_cmd =
+      -params_.se3_controller.kp_rotation * eR -
+      params_.se3_controller.kd_angular * eW +
+      omega_B.cross(J * omega_B);
+
+  const Eigen::Vector4d rotor_input = MixToRotorInputs(thrust, moment_cmd);
+  output->utime = static_cast<int64_t>(std::llround(context.get_time() * 1e6));
+  for (int i = 0; i < 4; ++i) {
+    output->rotor_input[i] = rotor_input(i);
+  }
+}
+
+Eigen::Vector4d Se3Controller::MixToRotorInputs(
+    double thrust, const Eigen::Vector3d& moment_B) const {
+  const double b = params_.plant.thrust_coeff;
+  const double d = params_.plant.yaw_moment_coeff;
+  const double a = params_.plant.thrust_coeff * params_.plant.arm_length /
+                   std::sqrt(2.0);
+
+  Eigen::Matrix4d mixer;
+  mixer << b, b, b, b,
+           a, a, -a, -a,
+           -a, a, a, -a,
+           d, -d, d, -d;
+
+  Eigen::Vector4d wrench;
+  wrench << thrust, moment_B.x(), moment_B.y(), moment_B.z();
+  Eigen::Vector4d rotor_input = mixer.fullPivLu().solve(wrench);
+
+  for (int i = 0; i < 4; ++i) {
+    rotor_input(i) = std::clamp(rotor_input(i), 0.0, params_.plant.max_rotor_input);
+  }
+  return rotor_input;
+}
+
+Eigen::Vector3d Se3Controller::Vee(const Eigen::Matrix3d& m) {
+  return {m(2, 1), m(0, 2), m(1, 0)};
+}
+
+}  // namespace systems
+}  // namespace uav_delivery

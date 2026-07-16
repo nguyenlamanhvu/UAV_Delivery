@@ -3,10 +3,10 @@ model: UAV_models/skydio_2/quadrotor.urdf
 plant:
   mass: 0.775
   gravity: 9.81
-  arm_length: 0.22
-  thrust_coeff: 1.0e-5
-  yaw_moment_coeff: 1.6e-7
-  max_rotor_speed: 1200.0
+  arm_length: 0.15
+  thrust_coeff: 1.0
+  yaw_moment_coeff: 1.0e-2
+  max_rotor_input: 5.0
   inertia: [0.0015, 0.0025, 0.0035]
 
 initial_state:
@@ -20,12 +20,14 @@ lcm_channels:
   state: UAV_QUADROTOR_STATE
   sim_time: UAV_SIM_TIME
 
-hover_controller:
-  desired_z: 1.0
-  kp_rpy: [3.0, 3.0, 1.2]
-  kd_angular: [0.35, 0.35, 0.18]
-  kp_z: 2.0
-  kd_z: 0.8
+se3_controller:
+  desired_position: [1.0, 1.0, 2.0]
+  desired_velocity: [0.0, 0.0, 0.0]
+  desired_yaw: 0.0
+  kp_position: 4.0
+  kd_position: 3.0
+  kp_rotation: 1.5
+  kd_angular: 0.3
 
 publish_rate: 100.0
 realtime_rate: 1.0

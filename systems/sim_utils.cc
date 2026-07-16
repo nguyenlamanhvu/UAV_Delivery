@@ -22,9 +22,9 @@ drake::systems::EventStatus ConsoleLogger::Print(
     const drake::systems::Context<double>& context) const {
   const Eigen::VectorXd x = this->get_input_port(input_port_).Eval(context);
   std::cout << "t=" << context.get_time() << " p=[" << x(0) << ", " << x(1)
-            << ", " << x(2) << "] rpy=[" << x(3) << ", " << x(4) << ", "
-            << x(5) << "] v=[" << x(6) << ", " << x(7) << ", " << x(8)
-            << "]" << std::endl;
+            << ", " << x(2) << "] v=[" << x(3) << ", " << x(4) << ", "
+            << x(5) << "] omega=[" << x(15) << ", " << x(16) << ", "
+            << x(17) << "]" << std::endl;
   return drake::systems::EventStatus::Succeeded();
 }
 

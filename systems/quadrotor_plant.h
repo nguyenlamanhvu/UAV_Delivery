@@ -15,7 +15,7 @@ class QuadrotorPlant final : public drake::systems::LeafSystem<double> {
  public:
   explicit QuadrotorPlant(QuadrotorParams params);
 
-  static constexpr int kStateSize = 12;
+  static constexpr int kStateSize = 18;
 
   const drake::systems::InputPort<double>& get_command_input_port() const;
 
@@ -32,10 +32,8 @@ class QuadrotorPlant final : public drake::systems::LeafSystem<double> {
     Eigen::Vector3d moment_B{Eigen::Vector3d::Zero()};
   };
 
-  RotorWrench CalcRotorWrench(const Eigen::Vector4d& rotor_speeds) const;
-  static Eigen::Matrix3d RotationMatrixFromRpy(const Eigen::Vector3d& rpy);
-  static Eigen::Vector3d EulerRatesFromBodyRates(const Eigen::Vector3d& rpy,
-                                                 const Eigen::Vector3d& omega_B);
+  RotorWrench CalcRotorWrench(const Eigen::Vector4d& rotor_inputs) const;
+  static Eigen::Matrix3d Hat(const Eigen::Vector3d& v);
 
   const QuadrotorParams params_;
   drake::systems::InputPortIndex command_port_;

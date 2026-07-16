@@ -5,7 +5,8 @@ struct lcmt_quadrotor_state
   int64_t utime;
 
   double position[3];
-  double rpy[3];
   double velocity[3];
+  double rotation[9];
+  double rpy[3];
   double body_angular_velocity[3];
 }
