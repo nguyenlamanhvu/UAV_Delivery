@@ -8,10 +8,10 @@ message types.
 
 ## Layout
 
-- `src/quadrotor_sim.cc`: quadrotor plant simulation process.
+- `src/quadrotor_sim.cc`: MultibodyPlant simulation process with Drake
+  `Propeller` systems.
 - `src/quadrotor_se3_controller.cc`: state-driven SE(3) controller process.
 - `src/quadrotor_visualizer.cc`: Meshcat visualizer process for the URDF model.
-- `systems/quadrotor_plant.*`: 18-state SE(3) quadrotor dynamics.
 - `systems/se3_controller.*`: geometric SE(3) controller LeafSystem with LCM
   message input/output ports.
 - `systems/lcm_driven_loop.h`: dairlib-style LCM-driven execution loop.
