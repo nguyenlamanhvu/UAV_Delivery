@@ -25,6 +25,10 @@ std::string ShellQuote(const std::string& value) {
 
 }  // namespace
 
+std::string ActorMeshcatPath(const std::string& actor_name) {
+  return actor_name.empty() ? "/actors/unnamed" : "/actors/" + actor_name;
+}
+
 void MaybeWriteDiagramSvg(const drake::systems::Diagram<double>& diagram,
                           const std::string& svg_path) {
   if (svg_path.empty()) {

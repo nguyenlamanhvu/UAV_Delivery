@@ -1,0 +1,9 @@
+package uav_delivery;
+
+struct lcmt_moving_target_teleop_command {
+  int64_t utime;
+  int64_t timestamp_millis;
+  double throttle;
+  double turn;
+  boolean stop;
+}

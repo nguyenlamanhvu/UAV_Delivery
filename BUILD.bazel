@@ -13,11 +13,30 @@ cc_library(
 )
 
 cc_library(
+    name = "moving_target_params",
+    srcs = ["params/moving_target_params.cc"],
+    hdrs = ["params/moving_target_params.h"],
+    deps = [
+        "@drake//common/yaml:yaml_read_archive",
+    ],
+)
+
+cc_library(
     name = "quadrotor_plant",
     srcs = ["systems/quadrotor_plant.cc"],
     hdrs = ["systems/quadrotor_plant.h"],
     deps = [
         ":quadrotor_params",
+        "@drake//systems/framework",
+    ],
+)
+
+cc_library(
+    name = "moving_target_plant",
+    srcs = ["systems/moving_target_plant.cc"],
+    hdrs = ["systems/moving_target_plant.h"],
+    deps = [
+        ":moving_target_params",
         "@drake//systems/framework",
     ],
 )
@@ -29,7 +48,19 @@ cc_library(
     deps = [
         ":quadrotor_params",
         "//lcmtypes:uav_lcmtypes",
+        "@drake//common:value",
         "@drake//math",
+        "@drake//systems/framework",
+    ],
+)
+
+cc_library(
+    name = "moving_target_lcm_systems",
+    srcs = ["systems/moving_target_lcm_systems.cc"],
+    hdrs = ["systems/moving_target_lcm_systems.h"],
+    deps = [
+        "//lcmtypes:uav_lcmtypes",
+        "@drake//common:value",
         "@drake//systems/framework",
     ],
 )
@@ -41,6 +72,16 @@ cc_library(
     deps = [
         ":quadrotor_params",
         "//lcmtypes:uav_lcmtypes",
+        "@drake//systems/framework",
+    ],
+)
+
+cc_library(
+    name = "moving_target_controller_lib",
+    srcs = ["systems/moving_target_controller.cc"],
+    hdrs = ["systems/moving_target_controller.h"],
+    deps = [
+        ":moving_target_params",
         "@drake//systems/framework",
     ],
 )
@@ -99,6 +140,28 @@ cc_binary(
 )
 
 cc_binary(
+    name = "moving_target_sim",
+    srcs = ["src/moving_target_sim.cc"],
+    data = [
+        "config/moving_target.yaml",
+        "//UAV_models:uav_files",
+    ],
+    deps = [
+        ":diagram_utils",
+        ":moving_target_lcm_systems",
+        ":moving_target_params",
+        ":moving_target_plant",
+        ":quadrotor_sim_utils",
+        "//lcmtypes:uav_lcmtypes",
+        "@drake//common/yaml:yaml_io",
+        "@drake//systems/analysis:simulator",
+        "@drake//systems/framework",
+        "@drake//systems/lcm",
+        "@gflags//:gflags",
+    ],
+)
+
+cc_binary(
     name = "quadrotor_se3_controller",
     srcs = ["src/quadrotor_se3_controller.cc"],
     data = ["config/quadrotor_sim.yaml"],
@@ -119,6 +182,39 @@ cc_binary(
 )
 
 cc_binary(
+    name = "moving_target_controller",
+    srcs = ["src/moving_target_controller.cc"],
+    data = ["config/moving_target.yaml"],
+    deps = [
+        ":diagram_utils",
+        ":lcm_driven_loop",
+        ":moving_target_controller_lib",
+        ":moving_target_lcm_systems",
+        ":moving_target_params",
+        ":quadrotor_sim_utils",
+        "//lcmtypes:uav_lcmtypes",
+        "@drake//common/yaml:yaml_io",
+        "@drake//lcm",
+        "@drake//systems/framework",
+        "@drake//systems/lcm",
+        "@gflags//:gflags",
+    ],
+)
+
+cc_binary(
+    name = "moving_target_teleop",
+    srcs = ["src/moving_target_teleop.cc"],
+    data = ["config/moving_target.yaml"],
+    deps = [
+        ":moving_target_params",
+        "//lcmtypes:uav_lcmtypes",
+        "@drake//common/yaml:yaml_io",
+        "@drake//lcm",
+        "@gflags//:gflags",
+    ],
+)
+
+cc_binary(
     name = "quadrotor_visualizer",
     srcs = ["src/quadrotor_visualizer.cc"],
     data = [
@@ -129,6 +225,26 @@ cc_binary(
         ":diagram_utils",
         ":quadrotor_lcm_systems",
         ":quadrotor_params",
+        ":quadrotor_sim_utils",
+        "//lcmtypes:uav_lcmtypes",
+        "@drake//:drake_shared_library",
+        "@drake//common/yaml:yaml_io",
+        "@gflags//:gflags",
+    ],
+)
+
+cc_binary(
+    name = "moving_target_visualizer",
+    srcs = ["src/moving_target_visualizer.cc"],
+    data = [
+        "config/moving_target.yaml",
+        "//UAV_models:uav_files",
+    ],
+    deps = [
+        ":diagram_utils",
+        ":moving_target_lcm_systems",
+        ":moving_target_params",
+        ":moving_target_plant",
         ":quadrotor_sim_utils",
         "//lcmtypes:uav_lcmtypes",
         "@drake//:drake_shared_library",

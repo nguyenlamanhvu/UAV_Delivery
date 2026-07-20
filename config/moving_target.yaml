@@ -1,0 +1,40 @@
+model: "UAV_models/moving_target/moving_target.urdf"
+plant:
+  mass: 18.0
+  yaw_inertia: 3.2
+  wheel_radius: 0.12
+  track_width: 0.5
+  wheel_base: 0.6
+  k_drive: 0.32
+  k_turn: 0.42
+  d_v: 0.35
+  d_yaw: 0.55
+  k_wheel: 2.8
+  max_drive_torque: 12.0
+initial_state:
+  position: [0.0, 0.0]
+  yaw: 0.0
+  forward_speed: 0.0
+  yaw_rate: 0.0
+  wheel_angles: [0.0, 0.0, 0.0, 0.0]
+controller:
+  throttle_gain: 10.0
+  turn_gain: 6.0
+  max_drive_torque: 12.0
+teleop:
+  publish_rate: 20.0
+  throttle_step: 0.2
+  turn_step: 0.25
+  decay_rate: 1.5
+lcm_channels:
+  teleop_command: "MOVING_TARGET_TELEOP_CMD"
+  actuation_command: "MOVING_TARGET_ACTUATION_CMD"
+  state: "MOVING_TARGET_STATE"
+actor:
+  actor_name: "moving_target"
+  meshcat_root: "/actors/moving_target"
+publish_rate: 60.0
+realtime_rate: 1.0
+sim_time: 30.0
+console_log: true
+console_period: 0.25

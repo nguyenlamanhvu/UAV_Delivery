@@ -1,9 +1,10 @@
 package(default_visibility = ["//visibility:public"])
 
 filegroup(
-    name = "uav_files",  # Changed name to avoid cycle
+    name = "uav_files",
     srcs = [
         ":skydio_2",
+        ":moving_target",
     ],
 )
 
@@ -11,5 +12,12 @@ filegroup(
     name = "skydio_2",
     srcs = glob([
         "skydio_2/**",
+    ]),
+)
+
+filegroup(
+    name = "moving_target",
+    srcs = glob([
+        "moving_target/**",
     ]),
 )
