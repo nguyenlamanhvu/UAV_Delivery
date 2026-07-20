@@ -16,6 +16,7 @@ logs/
 a.out
 venv/
 *.svg
+*.dot
 *.gdb_history
 /test/
 drake_env/

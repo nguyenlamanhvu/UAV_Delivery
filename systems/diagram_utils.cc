@@ -26,12 +26,20 @@ std::string ShellQuote(const std::string& value) {
 }  // namespace
 
 void MaybeWriteDiagramSvg(const drake::systems::Diagram<double>& diagram,
-                          const std::string& svg_path) {
-  if (svg_path.empty()) {
-    return;
-  }
+                          const std::string& svg_path,
+                          const std::string& binary_name) {
+  const std::filesystem::path binary_path(binary_name);
+  const std::string default_file =
+      binary_path.filename().empty() ? "diagram.svg"
+                                     : binary_path.filename().string() + ".svg";
 
-  const std::filesystem::path output(svg_path);
+  std::filesystem::path output = svg_path.empty() ? std::filesystem::path(default_file)
+                                                  : std::filesystem::path(svg_path);
+  if (std::filesystem::is_directory(output)) {
+    output /= default_file;
+  } else if (output.extension() != ".svg") {
+    output += ".svg";
+  }
   const std::filesystem::path dot_path = output.string() + ".dot";
   {
     std::ofstream dot(dot_path);
