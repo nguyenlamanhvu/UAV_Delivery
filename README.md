@@ -71,7 +71,8 @@ Optional terminal 4, visualize the URDF in Meshcat:
 bazel run //:quadrotor_visualizer
 ```
 
-Export a process diagram SVG while starting any binary:
+Each binary writes a process diagram SVG on startup using the binary name, for
+example `quadrotor_sim.svg`. Override the output path when needed:
 
 ```bash
 bazel run //:quadrotor_sim -- --diagram_svg=/tmp/quadrotor_sim.svg
@@ -80,7 +81,8 @@ bazel run //:quadrotor_visualizer -- --diagram_svg=/tmp/quadrotor_visualizer.svg
 ```
 
 This uses Graphviz `dot`. If `dot` is not installed, the binary still writes a
-`.dot` file next to the requested SVG path.
+`.dot` file next to the SVG path. Passing a directory writes
+`<binary_name>.svg` inside that directory.
 
 Use the repo-local spy above so Java has the generated
 `uav_delivery.lcmt_*` classes on its classpath. A system `lcm-spy` may see the

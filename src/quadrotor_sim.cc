@@ -37,7 +37,7 @@ DEFINE_string(config, "config/quadrotor_sim.yaml",
 DEFINE_string(lcm_url,
               "udpm://239.255.76.67:7667?ttl=0",
               "LCM URL for this instance");
-DEFINE_string(diagram_svg, "", "Optional path to write the system diagram SVG.");
+DEFINE_string(diagram_svg, "", "Path or directory for the system diagram SVG.");
 
 namespace uav_delivery {
 namespace {
@@ -156,7 +156,7 @@ int DoMain(int argc, char* argv[]) {
   builder.AddSystem<systems::SimTerminator>();
 
   auto diagram = builder.Build();
-  systems::MaybeWriteDiagramSvg(*diagram, FLAGS_diagram_svg);
+  systems::MaybeWriteDiagramSvg(*diagram, FLAGS_diagram_svg, argv[0]);
   auto context = diagram->CreateDefaultContext();
   auto& plant_context = plant->GetMyMutableContextFromRoot(context.get());
   const drake::math::RigidTransform<double> X_WB(
