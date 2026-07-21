@@ -6,6 +6,13 @@ examples: one process publishes simulated robot state, another process subscribe
 to state and publishes commands, and a repo-local LCM spy knows the custom UAV
 message types.
 
+## Result
+The quadrotor follows predefined waypoints.
+
+https://github.com/user-attachments/assets/85d4a68f-ae4d-43df-85ed-58167a0db412
+
+
+
 ## Layout
 
 - `src/quadrotor_sim.cc`: MultibodyPlant simulation process with Drake
