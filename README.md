@@ -13,7 +13,8 @@ message types.
 - `src/quadrotor_se3_controller.cc`: state-driven SE(3) pose controller process.
 - `src/quadrotor_waypoint_trajectory.cc`: state-driven waypoint reference
   generator process.
-- `src/quadrotor_visualizer.cc`: Meshcat visualizer process for the URDF model.
+- `src/quadrotor_visualizer.cc`: Meshcat visualizer process for the URDF model,
+  configured waypoints, and trajectory preview.
 - `systems/se3_controller.*`: geometric SE(3) controller LeafSystem with LCM
   message input/output ports.
 - `systems/reference_trajectory_unpacker.*`: trajectory preview unpacker used
@@ -78,7 +79,8 @@ Inspect LCM:
 bazel run //lcmtypes:uav-lcm-spy
 ```
 
-Optional terminal 4, visualize the URDF in Meshcat:
+Optional terminal 4, visualize the URDF, configured waypoints, and latest
+trajectory preview in Meshcat:
 
 ```bash
 bazel run //:quadrotor_visualizer
@@ -119,7 +121,8 @@ quadrotor_waypoint_trajectory listens to UAV_QUADROTOR_STATE -> UAV_QUADROTOR_RE
 quadrotor_se3_controller listens to UAV_QUADROTOR_STATE + UAV_QUADROTOR_REFERENCE_TRAJECTORY
 quadrotor_se3_controller internally unpacks trajectory -> SE(3) reference -> UAV_QUADROTOR_COMMAND
 quadrotor_sim -> UAV_SIM_TIME
-quadrotor_visualizer subscribes UAV_QUADROTOR_STATE and renders the URDF in Meshcat
+quadrotor_visualizer subscribes UAV_QUADROTOR_STATE + UAV_QUADROTOR_REFERENCE_TRAJECTORY
+quadrotor_visualizer renders the URDF, YAML yaw-aligned waypoint XYZ markers, and live preview path in Meshcat
 ```
 
 The SE(3) controller is driven by `UAV_QUADROTOR_STATE`: it waits for a new
