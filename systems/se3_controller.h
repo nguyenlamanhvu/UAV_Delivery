@@ -6,6 +6,7 @@
 #include "drake/systems/framework/leaf_system.h"
 #include "params/quadrotor_params.h"
 #include "uav_delivery/lcmt_quadrotor_command.hpp"
+#include "uav_delivery/lcmt_quadrotor_reference.hpp"
 
 namespace uav_delivery {
 namespace systems {
@@ -13,6 +14,7 @@ namespace systems {
 class Se3Controller final : public drake::systems::LeafSystem<double> {
  public:
   explicit Se3Controller(QuadrotorSimParams params);
+  lcmt_quadrotor_reference MakeDefaultReference() const;
 
  private:
   void CalcCommand(const drake::systems::Context<double>& context,
@@ -25,6 +27,7 @@ class Se3Controller final : public drake::systems::LeafSystem<double> {
 
   QuadrotorSimParams params_;
   drake::systems::InputPortIndex state_port_;
+  drake::systems::InputPortIndex reference_port_;
 };
 
 }  // namespace systems

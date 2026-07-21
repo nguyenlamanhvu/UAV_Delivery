@@ -18,10 +18,11 @@ initial_state:
 lcm_channels:
   command: UAV_QUADROTOR_COMMAND
   state: UAV_QUADROTOR_STATE
+  reference: UAV_QUADROTOR_REFERENCE
   sim_time: UAV_SIM_TIME
 
 se3_controller:
-  desired_position: [1.0, 1.0, 2.0]
+  desired_position: [0.0, 0.0, 1.0]
   desired_velocity: [0.0, 0.0, 0.0]
   desired_yaw: 0.0
   kp_position: 4.0
@@ -29,8 +30,27 @@ se3_controller:
   kp_rotation: 1.5
   kd_angular: 0.3
 
-publish_rate: 100.0
+trajectory:
+  publish_rate: 100.0
+  waypoints:
+    - time: 0.0
+      position: [0.0, 0.0, 1.0]
+      yaw: 0.0
+    - time: 2.0
+      position: [1.0, 0.0, 2.0]
+      yaw: 0.0
+    - time: 4.0
+      position: [1.0, 1.0, 1.0]
+      yaw: 1.57
+    - time: 6.0
+      position: [-1.0, 1.0, 1.0]
+      yaw: 3.14
+    - time: 8.0
+      position: [-1.0, -1.0, 1.5]
+      yaw: -1.57
+
+publish_rate: 1000.0
 realtime_rate: 1.0
-sim_time: 10.0
+sim_time: 20.0
 console_log: true
 console_period: 0.25

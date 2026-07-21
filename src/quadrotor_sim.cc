@@ -65,7 +65,7 @@ class MultibodyQuadrotorState final : public drake::systems::LeafSystem<double> 
     state.segment<3>(3) = x.segment<3>(10);
     Eigen::Map<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>>(state.data() + 6) =
         R;
-    state.segment<3>(15) = x.segment<3>(7);
+    state.segment<3>(15) = R.transpose() * x.segment<3>(7);
     output->SetFromVector(state);
   }
 

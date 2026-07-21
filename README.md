@@ -10,10 +10,14 @@ message types.
 
 - `src/quadrotor_sim.cc`: MultibodyPlant simulation process with Drake
   `Propeller` systems.
-- `src/quadrotor_se3_controller.cc`: state-driven SE(3) controller process.
+- `src/quadrotor_se3_controller.cc`: state-driven SE(3) pose controller process.
+- `src/quadrotor_waypoint_trajectory.cc`: state-driven waypoint reference
+  generator process.
 - `src/quadrotor_visualizer.cc`: Meshcat visualizer process for the URDF model.
 - `systems/se3_controller.*`: geometric SE(3) controller LeafSystem with LCM
   message input/output ports.
+- `systems/waypoint_trajectory_source.*`: timed waypoint interpolation into
+  SE(3) reference messages, driven by incoming UAV state.
 - `systems/lcm_driven_loop.h`: dairlib-style LCM-driven execution loop.
 - `systems/diagram_utils.*`: optional Graphviz SVG export for process diagrams.
 - `systems/lcm_systems.*`: LCM message receiver/sender systems.
@@ -28,13 +32,13 @@ message types.
 Regular build:
 
 ```bash
-bazel --batch build --jobs=12 //:quadrotor_sim //:quadrotor_se3_controller //:quadrotor_visualizer //lcmtypes:uav-lcm-spy
+bazel --batch build --jobs=12 //:quadrotor_sim //:quadrotor_se3_controller //:quadrotor_waypoint_trajectory //:quadrotor_visualizer //lcmtypes:uav-lcm-spy
 ```
 
 Release build:
 
 ```bash
-bazel --batch build --config=release --jobs=12 //:quadrotor_sim //:quadrotor_se3_controller //:quadrotor_visualizer //lcmtypes:uav-lcm-spy
+bazel --batch build --config=release --jobs=12 //:quadrotor_sim //:quadrotor_se3_controller //:quadrotor_waypoint_trajectory //:quadrotor_visualizer //lcmtypes:uav-lcm-spy
 ```
 
 The repo uses Drake v1.51.1 through Bzlmod in `MODULE.bazel`.
@@ -59,7 +63,16 @@ Terminal 2, start the SE(3) controller:
 bazel run //:quadrotor_se3_controller
 ```
 
-Terminal 3, inspect LCM:
+Terminal 3, publish waypoint references. This process waits for
+`UAV_QUADROTOR_STATE`, advances on every state tick, and uses Drake periodic
+events to update/publish `UAV_QUADROTOR_REFERENCE` at
+`trajectory.publish_rate`:
+
+```bash
+bazel run //:quadrotor_waypoint_trajectory
+```
+
+Inspect LCM:
 
 ```bash
 bazel run //lcmtypes:uav-lcm-spy
@@ -94,19 +107,21 @@ Defined in `config/quadrotor_sim.yaml`:
 
 - `UAV_QUADROTOR_STATE`: `uav_delivery.lcmt_quadrotor_state`
 - `UAV_QUADROTOR_COMMAND`: `uav_delivery.lcmt_quadrotor_command`
+- `UAV_QUADROTOR_REFERENCE`: `uav_delivery.lcmt_quadrotor_reference`
 - `UAV_SIM_TIME`: `uav_delivery.lcmt_sim_time`
 
 The current process graph is:
 
 ```text
 quadrotor_sim -> UAV_QUADROTOR_STATE
+quadrotor_waypoint_trajectory listens to UAV_QUADROTOR_STATE -> UAV_QUADROTOR_REFERENCE
 quadrotor_se3_controller -> UAV_QUADROTOR_COMMAND
 quadrotor_sim -> UAV_SIM_TIME
 quadrotor_visualizer subscribes UAV_QUADROTOR_STATE and renders the URDF in Meshcat
 ```
 
 The SE(3) controller is driven by `UAV_QUADROTOR_STATE`: it waits for a new
-state message, fixes that LCM message directly into the controller diagram,
+state message, updates the latest waypoint reference if one has arrived,
 advances to the message timestamp, and then force-publishes one
 `UAV_QUADROTOR_COMMAND`.
 
@@ -118,6 +133,7 @@ Most tuning lives in `config/quadrotor_sim.yaml`:
 - Plant parameters: mass, gravity, arm length, thrust/yaw coefficients, inertia.
 - Initial state: position, initial RPY used to seed `R`, linear velocity, body angular velocity.
 - SE(3) controller gains: desired position/velocity/yaw and geometric PD gains.
+- Waypoint trajectory: timed position/yaw waypoints and reference publish rate.
 - Runtime settings: publish rate, realtime rate, sim time, console logging.
 
 `lcm_url` is intentionally a command-line flag, not YAML:
@@ -125,6 +141,13 @@ Most tuning lives in `config/quadrotor_sim.yaml`:
 ```bash
 bazel run //:quadrotor_sim -- --lcm_url="udpm://239.255.76.67:7667?ttl=0"
 ```
+
+The waypoint process is state-driven like the controller: it waits for
+`UAV_QUADROTOR_STATE`, advances its diagram time to the state timestamp, then
+updates its internal reference with a periodic unrestricted update event at
+`trajectory.publish_rate`. A periodic LCM publisher sends
+`UAV_QUADROTOR_REFERENCE` at the same rate, so the sim/controller can run at
+500-1000 Hz while waypoints update at 100 Hz.
 
 ## Debug Notes
 
