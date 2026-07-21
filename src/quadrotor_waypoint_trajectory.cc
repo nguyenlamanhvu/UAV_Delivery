@@ -12,8 +12,8 @@
 #include "systems/lcm_driven_loop.h"
 #include "systems/sim_utils.h"
 #include "systems/waypoint_trajectory_source.h"
-#include "uav_delivery/lcmt_quadrotor_reference.hpp"
 #include "uav_delivery/lcmt_quadrotor_state.hpp"
+#include "uav_delivery/lcmt_timestamped_saved_traj.hpp"
 
 DEFINE_string(config, "config/quadrotor_sim.yaml",
               "YAML file containing QuadrotorSimParams.");
@@ -37,8 +37,8 @@ int DoMain(int argc, char* argv[]) {
   auto* trajectory =
       builder.AddSystem<systems::WaypointTrajectorySource>(params.trajectory);
   auto* reference_pub = builder.AddSystem(
-      drake::systems::lcm::LcmPublisherSystem::Make<lcmt_quadrotor_reference>(
-          params.lcm_channels.reference, &lcm,
+      drake::systems::lcm::LcmPublisherSystem::Make<lcmt_timestamped_saved_traj>(
+          params.lcm_channels.reference_trajectory, &lcm,
           1.0 / params.trajectory.publish_rate));
   builder.Connect(trajectory->get_output_port(0), reference_pub->get_input_port());
   builder.AddSystem<systems::SimTerminator>();
@@ -49,8 +49,10 @@ int DoMain(int argc, char* argv[]) {
   std::cout << "Quadrotor waypoint trajectory config: " << FLAGS_config << "\n";
   std::cout << "Subscribing state on " << params.lcm_channels.state << "\n";
   std::cout << "Updating and publishing reference on "
-            << params.lcm_channels.reference << " at "
+            << params.lcm_channels.reference_trajectory << " at "
             << params.trajectory.publish_rate << " Hz\n";
+  std::cout << "Reference preview: " << params.trajectory.preview_horizon
+            << " knots at dt=" << params.trajectory.preview_dt << "s\n";
   std::cout << "Waypoints: " << params.trajectory.waypoints.size() << "\n";
 
   systems::LcmDrivenLoop<lcmt_quadrotor_state> loop(

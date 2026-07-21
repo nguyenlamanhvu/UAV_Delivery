@@ -19,6 +19,7 @@ lcm_channels:
   command: UAV_QUADROTOR_COMMAND
   state: UAV_QUADROTOR_STATE
   reference: UAV_QUADROTOR_REFERENCE
+  reference_trajectory: UAV_QUADROTOR_REFERENCE_TRAJECTORY
   sim_time: UAV_SIM_TIME
 
 se3_controller:
@@ -32,6 +33,8 @@ se3_controller:
 
 trajectory:
   publish_rate: 100.0
+  preview_horizon: 20
+  preview_dt: 0.001
   waypoints:
     - time: 0.0
       position: [0.0, 0.0, 1.0]

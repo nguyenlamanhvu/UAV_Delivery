@@ -14,7 +14,7 @@ namespace systems {
 class Se3Controller final : public drake::systems::LeafSystem<double> {
  public:
   explicit Se3Controller(QuadrotorSimParams params);
-  lcmt_quadrotor_reference MakeDefaultReference() const;
+  lcmt_quadrotor_reference MakeDefaultReference(double time = 0.0) const;
 
  private:
   void CalcCommand(const drake::systems::Context<double>& context,

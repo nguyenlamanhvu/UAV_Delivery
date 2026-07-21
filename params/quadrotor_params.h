@@ -49,6 +49,7 @@ struct QuadrotorLcmChannels {
   std::string command{"UAV_QUADROTOR_COMMAND"};
   std::string state{"UAV_QUADROTOR_STATE"};
   std::string reference{"UAV_QUADROTOR_REFERENCE"};
+  std::string reference_trajectory{"UAV_QUADROTOR_REFERENCE_TRAJECTORY"};
   std::string sim_time{"UAV_SIM_TIME"};
 
   template <typename Archive>
@@ -56,6 +57,7 @@ struct QuadrotorLcmChannels {
     a->Visit(DRAKE_NVP(command));
     a->Visit(DRAKE_NVP(state));
     a->Visit(DRAKE_NVP(reference));
+    a->Visit(DRAKE_NVP(reference_trajectory));
     a->Visit(DRAKE_NVP(sim_time));
   }
 };
@@ -96,6 +98,8 @@ struct QuadrotorWaypoint {
 
 struct QuadrotorTrajectoryParams {
   double publish_rate{10.0};
+  int preview_horizon{20};
+  double preview_dt{0.001};
   std::vector<QuadrotorWaypoint> waypoints{
       {0.0, Eigen::Vector3d{0.0, 0.0, 1.0}, 0.0},
       {5.0, Eigen::Vector3d{1.0, 0.0, 1.0}, 0.0},
@@ -105,6 +109,8 @@ struct QuadrotorTrajectoryParams {
   template <typename Archive>
   void Serialize(Archive* a) {
     a->Visit(DRAKE_NVP(publish_rate));
+    a->Visit(DRAKE_NVP(preview_horizon));
+    a->Visit(DRAKE_NVP(preview_dt));
     a->Visit(DRAKE_NVP(waypoints));
   }
 };

@@ -8,8 +8,8 @@
 #include "drake/systems/framework/leaf_system.h"
 #include "drake/systems/framework/state.h"
 #include "params/quadrotor_params.h"
-#include "uav_delivery/lcmt_quadrotor_reference.hpp"
 #include "uav_delivery/lcmt_quadrotor_state.hpp"
+#include "uav_delivery/lcmt_timestamped_saved_traj.hpp"
 
 namespace uav_delivery {
 namespace systems {
@@ -33,8 +33,8 @@ class WaypointTrajectorySource final
       const drake::systems::Context<double>& context,
       drake::systems::State<double>* state) const;
   void CalcReference(const drake::systems::Context<double>& context,
-                     lcmt_quadrotor_reference* output) const;
-  lcmt_quadrotor_reference MakeReference(double time) const;
+                     lcmt_timestamped_saved_traj* output) const;
+  lcmt_timestamped_saved_traj MakeReferenceTrajectory(double time) const;
   SegmentReference Evaluate(double time) const;
 
   QuadrotorTrajectoryParams params_;

@@ -1,0 +1,8 @@
+package uav_delivery;
+
+struct lcmt_saved_traj
+{
+  int32_t num_trajectories;
+  lcmt_trajectory_block trajectories[num_trajectories];
+  string trajectory_names[num_trajectories];
+}

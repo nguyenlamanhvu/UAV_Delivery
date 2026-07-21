@@ -13,6 +13,8 @@ namespace uav_delivery {
 namespace systems {
 namespace {
 
+constexpr const char* kReferenceTrajectoryName = "quadrotor_se3_reference";
+
 double Clamp01(double x) {
   return std::clamp(x, 0.0, 1.0);
 }
@@ -43,7 +45,8 @@ WaypointTrajectorySource::WaypointTrajectorySource(
       "quadrotor_state", drake::Value<lcmt_quadrotor_state>{})
                     .get_index();
   reference_state_index_ = this->DeclareAbstractState(
-      drake::Value<lcmt_quadrotor_reference>{MakeReference(waypoints_.front().time)});
+      drake::Value<lcmt_timestamped_saved_traj>{
+          MakeReferenceTrajectory(waypoints_.front().time)});
   this->DeclarePeriodicUnrestrictedUpdateEvent(
       1.0 / params_.publish_rate, 0.0,
       &WaypointTrajectorySource::UpdateReference);
@@ -55,39 +58,49 @@ drake::systems::EventStatus WaypointTrajectorySource::UpdateReference(
     const drake::systems::Context<double>& context,
     drake::systems::State<double>* state) const {
   auto& reference =
-      state->get_mutable_abstract_state<lcmt_quadrotor_reference>(
+      state->get_mutable_abstract_state<lcmt_timestamped_saved_traj>(
           reference_state_index_);
-  reference = MakeReference(context.get_time());
+  reference = MakeReferenceTrajectory(context.get_time());
   return drake::systems::EventStatus::Succeeded();
 }
 
 void WaypointTrajectorySource::CalcReference(
     const drake::systems::Context<double>& context,
-    lcmt_quadrotor_reference* output) const {
-  *output = context.get_abstract_state<lcmt_quadrotor_reference>(
+    lcmt_timestamped_saved_traj* output) const {
+  *output = context.get_abstract_state<lcmt_timestamped_saved_traj>(
       reference_state_index_);
 }
 
-lcmt_quadrotor_reference WaypointTrajectorySource::MakeReference(
+lcmt_timestamped_saved_traj WaypointTrajectorySource::MakeReferenceTrajectory(
     double time) const {
-  lcmt_quadrotor_reference output{};
-  const SegmentReference ref = Evaluate(time);
+  lcmt_timestamped_saved_traj output{};
   output.utime = static_cast<int64_t>(std::llround(time * 1e6));
 
-  const Eigen::Matrix3d R =
-      drake::math::RollPitchYaw<double>(0.0, 0.0, ref.yaw)
-          .ToRotationMatrix()
-          .matrix();
-  for (int i = 0; i < 3; ++i) {
-    output.position[i] = ref.position(i);
-    output.velocity[i] = ref.velocity(i);
-    output.acceleration[i] = ref.acceleration(i);
-    output.body_angular_velocity[i] = 0.0;
-    output.body_angular_acceleration[i] = 0.0;
+  lcmt_trajectory_block block{};
+  block.trajectory_name = kReferenceTrajectoryName;
+  block.num_points = params_.preview_horizon;
+  block.num_datatypes = 10;
+  block.datatypes = {"x", "y", "z", "vx", "vy", "vz", "ax", "ay", "az",
+                     "yaw"};
+  block.time_vec.resize(block.num_points);
+  block.datapoints.resize(
+      block.num_datatypes, std::vector<double>(block.num_points, 0.0));
+
+  for (int knot = 0; knot < block.num_points; ++knot) {
+    const double knot_time = time + knot * params_.preview_dt;
+    const SegmentReference ref = Evaluate(knot_time);
+    block.time_vec[knot] = knot_time;
+    for (int i = 0; i < 3; ++i) {
+      block.datapoints[i][knot] = ref.position(i);
+      block.datapoints[i + 3][knot] = ref.velocity(i);
+      block.datapoints[i + 6][knot] = ref.acceleration(i);
+    }
+    block.datapoints[9][knot] = ref.yaw;
   }
-  for (int i = 0; i < 9; ++i) {
-    output.rotation[i] = R(i / 3, i % 3);
-  }
+
+  output.saved_traj.num_trajectories = 1;
+  output.saved_traj.trajectory_names = {kReferenceTrajectoryName};
+  output.saved_traj.trajectories = {block};
   return output;
 }
 

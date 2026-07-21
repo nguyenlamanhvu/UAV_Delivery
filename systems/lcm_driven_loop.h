@@ -131,6 +131,22 @@ class LcmDrivenLoop {
       std::function<bool()> should_stop,
       std::function<void(drake::systems::Diagram<double>*,
                          drake::systems::Context<double>*)> pre_step) {
+    SimulateWithMessageCallback(
+        end_time, should_stop,
+        [&](const InputMessageType&, drake::systems::Diagram<double>* root,
+            drake::systems::Context<double>* root_context) {
+          if (pre_step) {
+            pre_step(root, root_context);
+          }
+        });
+  }
+
+  void SimulateWithMessageCallback(
+      double end_time,
+      std::function<bool()> should_stop,
+      std::function<void(const InputMessageType&,
+                         drake::systems::Diagram<double>*,
+                         drake::systems::Context<double>*)> pre_step) {
     auto& diagram_context = simulator_.get_mutable_context();
 
     std::cout << "Waiting for first LCM message on " << input_channel_
@@ -166,7 +182,7 @@ class LcmDrivenLoop {
       }
 
       if (pre_step) {
-        pre_step(diagram_ptr_, &diagram_context);
+        pre_step(message, diagram_ptr_, &diagram_context);
       }
 
       time = message.utime * 1e-6;

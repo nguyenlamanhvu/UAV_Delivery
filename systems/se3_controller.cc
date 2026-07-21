@@ -129,8 +129,9 @@ Eigen::Vector3d Se3Controller::Vee(const Eigen::Matrix3d& m) {
   return {m(2, 1), m(0, 2), m(1, 0)};
 }
 
-lcmt_quadrotor_reference Se3Controller::MakeDefaultReference() const {
+lcmt_quadrotor_reference Se3Controller::MakeDefaultReference(double time) const {
   lcmt_quadrotor_reference reference{};
+  reference.utime = static_cast<int64_t>(std::llround(time * 1e6));
   for (int i = 0; i < 3; ++i) {
     reference.position[i] = params_.se3_controller.desired_position(i);
     reference.velocity[i] = params_.se3_controller.desired_velocity(i);

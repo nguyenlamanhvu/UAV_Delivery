@@ -49,6 +49,18 @@ cc_library(
 )
 
 cc_library(
+    name = "quadrotor_reference_unpacker_lib",
+    srcs = ["systems/reference_trajectory_unpacker.cc"],
+    hdrs = ["systems/reference_trajectory_unpacker.h"],
+    deps = [
+        ":quadrotor_params",
+        "//lcmtypes:uav_lcmtypes",
+        "@drake//math",
+        "@drake//systems/framework",
+    ],
+)
+
+cc_library(
     name = "quadrotor_sim_utils",
     srcs = ["systems/sim_utils.cc"],
     hdrs = ["systems/sim_utils.h"],
@@ -113,6 +125,7 @@ cc_binary(
         ":lcm_driven_loop",
         ":quadrotor_se3_controller_lib",
         ":quadrotor_params",
+        ":quadrotor_reference_unpacker_lib",
         ":quadrotor_sim_utils",
         "//lcmtypes:uav_lcmtypes",
         "@drake//common/yaml:yaml_io",

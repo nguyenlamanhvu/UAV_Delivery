@@ -16,6 +16,8 @@ message types.
 - `src/quadrotor_visualizer.cc`: Meshcat visualizer process for the URDF model.
 - `systems/se3_controller.*`: geometric SE(3) controller LeafSystem with LCM
   message input/output ports.
+- `systems/reference_trajectory_unpacker.*`: trajectory preview unpacker used
+  inside the SE(3) controller diagram.
 - `systems/waypoint_trajectory_source.*`: timed waypoint interpolation into
   SE(3) reference messages, driven by incoming UAV state.
 - `systems/lcm_driven_loop.h`: dairlib-style LCM-driven execution loop.
@@ -32,13 +34,13 @@ message types.
 Regular build:
 
 ```bash
-bazel --batch build --jobs=12 //:quadrotor_sim //:quadrotor_se3_controller //:quadrotor_waypoint_trajectory //:quadrotor_visualizer //lcmtypes:uav-lcm-spy
+bazel --batch build --jobs=12 //:quadrotor_sim //:quadrotor_waypoint_trajectory //:quadrotor_se3_controller //:quadrotor_visualizer //lcmtypes:uav-lcm-spy
 ```
 
 Release build:
 
 ```bash
-bazel --batch build --config=release --jobs=12 //:quadrotor_sim //:quadrotor_se3_controller //:quadrotor_waypoint_trajectory //:quadrotor_visualizer //lcmtypes:uav-lcm-spy
+bazel --batch build --config=release --jobs=12 //:quadrotor_sim //:quadrotor_waypoint_trajectory //:quadrotor_se3_controller //:quadrotor_visualizer //lcmtypes:uav-lcm-spy
 ```
 
 The repo uses Drake v1.51.1 through Bzlmod in `MODULE.bazel`.
@@ -57,19 +59,17 @@ Terminal 1, start the plant simulation:
 bazel run //:quadrotor_sim
 ```
 
-Terminal 2, start the SE(3) controller:
-
-```bash
-bazel run //:quadrotor_se3_controller
-```
-
-Terminal 3, publish waypoint references. This process waits for
-`UAV_QUADROTOR_STATE`, advances on every state tick, and uses Drake periodic
-events to update/publish `UAV_QUADROTOR_REFERENCE` at
-`trajectory.publish_rate`:
+Terminal 2, publish waypoint preview trajectories:
 
 ```bash
 bazel run //:quadrotor_waypoint_trajectory
+```
+
+Terminal 3, start the SE(3) controller. This process also unpacks the latest
+preview trajectory internally:
+
+```bash
+bazel run //:quadrotor_se3_controller
 ```
 
 Inspect LCM:
@@ -108,14 +108,16 @@ Defined in `config/quadrotor_sim.yaml`:
 - `UAV_QUADROTOR_STATE`: `uav_delivery.lcmt_quadrotor_state`
 - `UAV_QUADROTOR_COMMAND`: `uav_delivery.lcmt_quadrotor_command`
 - `UAV_QUADROTOR_REFERENCE`: `uav_delivery.lcmt_quadrotor_reference`
+- `UAV_QUADROTOR_REFERENCE_TRAJECTORY`: `uav_delivery.lcmt_timestamped_saved_traj`
 - `UAV_SIM_TIME`: `uav_delivery.lcmt_sim_time`
 
 The current process graph is:
 
 ```text
 quadrotor_sim -> UAV_QUADROTOR_STATE
-quadrotor_waypoint_trajectory listens to UAV_QUADROTOR_STATE -> UAV_QUADROTOR_REFERENCE
-quadrotor_se3_controller -> UAV_QUADROTOR_COMMAND
+quadrotor_waypoint_trajectory listens to UAV_QUADROTOR_STATE -> UAV_QUADROTOR_REFERENCE_TRAJECTORY
+quadrotor_se3_controller listens to UAV_QUADROTOR_STATE + UAV_QUADROTOR_REFERENCE_TRAJECTORY
+quadrotor_se3_controller internally unpacks trajectory -> SE(3) reference -> UAV_QUADROTOR_COMMAND
 quadrotor_sim -> UAV_SIM_TIME
 quadrotor_visualizer subscribes UAV_QUADROTOR_STATE and renders the URDF in Meshcat
 ```
@@ -144,10 +146,16 @@ bazel run //:quadrotor_sim -- --lcm_url="udpm://239.255.76.67:7667?ttl=0"
 
 The waypoint process is state-driven like the controller: it waits for
 `UAV_QUADROTOR_STATE`, advances its diagram time to the state timestamp, then
-updates its internal reference with a periodic unrestricted update event at
-`trajectory.publish_rate`. A periodic LCM publisher sends
-`UAV_QUADROTOR_REFERENCE` at the same rate, so the sim/controller can run at
-500-1000 Hz while waypoints update at 100 Hz.
+updates an internal preview trajectory with a periodic unrestricted update event
+at `trajectory.publish_rate`. A periodic LCM publisher sends
+`UAV_QUADROTOR_REFERENCE_TRAJECTORY` at the same rate as a timestamped saved trajectory.
+The `quadrotor_se3_reference` block contains rows
+`x,y,z,vx,vy,vz,ax,ay,az,yaw` and `trajectory.preview_horizon` knots spaced by
+`trajectory.preview_dt`. The SE(3) controller process contains an internal
+reference unpacker that runs on every state tick, selects the first preview knot
+whose timestamp is not earlier than the current state timestamp, and feeds that
+single reference directly into the SE(3) controller LeafSystem. The controller
+itself does not sample or interpolate trajectories.
 
 ## Debug Notes
 
