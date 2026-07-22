@@ -1,0 +1,18 @@
+renderer: vtk
+meshcat_port: 7002
+visualizer_publish_rate: 60.0
+
+camera:
+  width: 640
+  height: 480
+  fov_deg: 75.0
+  near: 0.02
+  far: 50.0
+  position: [0.18, 0.0, -0.03]
+  pitch_down_deg: 25.0
+  warmup_frames: 3
+
+image_output:
+  output_dir: /tmp/uav_delivery/drone_front_camera
+  file_pattern: drone_front_{count:03}
+  publish_period: 0.5

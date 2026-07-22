@@ -22,6 +22,14 @@ cc_library(
 )
 
 cc_library(
+    name = "quadrotor_target_camera_visualizer_params",
+    hdrs = ["params/quadrotor_camera_visualizer_params.h"],
+    deps = [
+        "@drake//common/yaml:yaml_read_archive",
+    ],
+)
+
+cc_library(
     name = "quadrotor_plant",
     srcs = ["systems/quadrotor_plant.cc"],
     hdrs = ["systems/quadrotor_plant.h"],
@@ -249,6 +257,44 @@ cc_binary(
         "//lcmtypes:uav_lcmtypes",
         "@drake//:drake_shared_library",
         "@drake//common/yaml:yaml_io",
+        "@gflags//:gflags",
+    ],
+)
+
+cc_binary(
+    name = "quadrotor_target_camera_visualizer",
+    srcs = ["src/quadrotor_target_camera_visualizer.cc"],
+    data = [
+        "config/quadrotor_sim.yaml",
+        "config/moving_target.yaml",
+        "config/quadrotor_target_camera_visualizer.yaml",
+        "//UAV_models:uav_files",
+    ],
+    deps = [
+        ":diagram_utils",
+        ":moving_target_lcm_systems",
+        ":moving_target_params",
+        ":quadrotor_lcm_systems",
+        ":quadrotor_target_camera_visualizer_params",
+        ":quadrotor_params",
+        ":quadrotor_sim_utils",
+        "//lcmtypes:uav_lcmtypes",
+        "@drake//common/yaml:yaml_io",
+        "@drake//geometry:drake_visualizer",
+        "@drake//geometry:meshcat",
+        "@drake//geometry:meshcat_visualizer",
+        "@drake//geometry/render_gl",
+        "@drake//geometry/render_vtk",
+        "@drake//math",
+        "@drake//multibody/parsing",
+        "@drake//multibody/plant",
+        "@drake//systems/analysis:simulator",
+        "@drake//systems/framework",
+        "@drake//systems/lcm",
+        "@drake//systems/rendering:multibody_position_to_geometry_pose",
+        "@drake//systems/sensors:camera_info",
+        "@drake//systems/sensors:image_writer",
+        "@drake//systems/sensors:rgbd_sensor",
         "@gflags//:gflags",
     ],
 )
