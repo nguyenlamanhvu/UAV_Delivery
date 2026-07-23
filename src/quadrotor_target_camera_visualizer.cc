@@ -34,6 +34,7 @@
 #include "drake/systems/framework/diagram_builder.h"
 #include "drake/systems/framework/leaf_system.h"
 #include "drake/systems/lcm/lcm_interface_system.h"
+#include "drake/systems/lcm/lcm_publisher_system.h"
 #include "drake/systems/lcm/lcm_subscriber_system.h"
 #include "drake/systems/rendering/multibody_position_to_geometry_pose.h"
 #include "drake/systems/sensors/camera_info.h"
@@ -45,9 +46,11 @@
 #include "systems/diagram_utils.h"
 #include "systems/lcm_systems.h"
 #include "systems/moving_target_lcm_systems.h"
+#include "systems/raruco_detector.h"
 #include "systems/sim_utils.h"
 #include "uav_delivery/lcmt_moving_target_state.hpp"
 #include "uav_delivery/lcmt_quadrotor_state.hpp"
+#include "uav_delivery/lcmt_raruco_detection.hpp"
 
 DEFINE_string(quadrotor_config, "config/quadrotor_sim.yaml",
               "YAML file containing QuadrotorSimParams.");
@@ -185,6 +188,11 @@ std::string CameraOutputFormat(
   return image_output_params.output_dir + "/" + image_output_params.file_pattern;
 }
 
+std::string OverlayOutputFormat(
+    const DroneCameraAnnotatedOutputParams& overlay_output_params) {
+  return overlay_output_params.output_dir + "/" + overlay_output_params.file_pattern;
+}
+
 void WarmStartCamera(drake::systems::Diagram<double>* diagram,
                      drake::systems::Context<double>* context,
                      const drake::systems::sensors::RgbdSensor<double>* camera,
@@ -215,6 +223,11 @@ int DoMain(int argc, char* argv[]) {
 
   std::filesystem::create_directories(
       camera_visualizer_params.image_output.output_dir);
+  if (camera_visualizer_params.detection.enabled &&
+      camera_visualizer_params.detection.overlay_output.enabled) {
+    std::filesystem::create_directories(
+        camera_visualizer_params.detection.overlay_output.output_dir);
+  }
 
   drake::systems::DiagramBuilder<double> builder;
   drake::multibody::MultibodyPlant<double> plant(0.0);
@@ -302,6 +315,36 @@ int DoMain(int argc, char* argv[]) {
       camera_visualizer_params.image_output.publish_period, 0.0);
   builder.Connect(drone_camera->color_image_output_port(), image_input);
 
+  systems::ProjectedRArucoDetector* raruco_detector = nullptr;
+  if (camera_visualizer_params.detection.enabled) {
+    raruco_detector = builder.AddSystem<systems::ProjectedRArucoDetector>(
+        camera_visualizer_params.camera, camera_visualizer_params.detection);
+    builder.Connect(quadrotor_state_receiver->get_output_port(0),
+                    raruco_detector->get_input_port(0));
+    builder.Connect(moving_target_state_receiver->get_output_port(0),
+                    raruco_detector->get_input_port(1));
+    builder.Connect(drone_camera->color_image_output_port(),
+                    raruco_detector->get_input_port(2));
+
+    auto* detection_pub = builder.AddSystem(
+        drake::systems::lcm::LcmPublisherSystem::Make<lcmt_raruco_detection>(
+            camera_visualizer_params.detection.lcm_channel, lcm,
+            camera_visualizer_params.detection.publish_period));
+    builder.Connect(raruco_detector->get_output_port(0),
+                    detection_pub->get_input_port());
+
+    if (camera_visualizer_params.detection.overlay_output.enabled) {
+      auto* overlay_writer =
+          builder.AddSystem<drake::systems::sensors::ImageWriter>();
+      const auto& overlay_input = overlay_writer->DeclareImageInputPort(
+          drake::systems::sensors::PixelType::kRgba8U,
+          "drone_front_camera_raruco_overlay",
+          OverlayOutputFormat(camera_visualizer_params.detection.overlay_output),
+          camera_visualizer_params.detection.overlay_output.publish_period, 0.0);
+      builder.Connect(raruco_detector->get_output_port(1), overlay_input);
+    }
+  }
+
   auto meshcat = std::make_shared<drake::geometry::Meshcat>(
       camera_visualizer_params.meshcat_port);
   drake::geometry::MeshcatVisualizerParams meshcat_params;
@@ -330,6 +373,18 @@ int DoMain(int argc, char* argv[]) {
   std::cout << "  saving camera frames to: "
             << CameraOutputFormat(camera_visualizer_params.image_output)
             << std::endl;
+  if (camera_visualizer_params.detection.enabled) {
+    std::cout << "  RArUco marker id: "
+              << camera_visualizer_params.detection.marker.id << std::endl;
+    std::cout << "  RArUco channel: "
+              << camera_visualizer_params.detection.lcm_channel << std::endl;
+    if (camera_visualizer_params.detection.overlay_output.enabled) {
+      std::cout << "  saving RArUco overlay frames to: "
+                << OverlayOutputFormat(
+                       camera_visualizer_params.detection.overlay_output)
+                << std::endl;
+    }
+  }
   std::cout << "  Meshcat: " << meshcat->web_url() << std::endl;
 
   WarmStartCamera(diagram.get(), context.get(), drone_camera,

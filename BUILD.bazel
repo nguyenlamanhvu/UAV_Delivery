@@ -116,6 +116,20 @@ cc_library(
 )
 
 cc_library(
+    name = "raruco_detector",
+    srcs = ["systems/raruco_detector.cc"],
+    hdrs = ["systems/raruco_detector.h"],
+    deps = [
+        ":quadrotor_target_camera_visualizer_params",
+        "//lcmtypes:uav_lcmtypes",
+        "@drake//common:value",
+        "@drake//math",
+        "@drake//systems/framework",
+        "@drake//systems/sensors:image",
+    ],
+)
+
+cc_library(
     name = "lcm_driven_loop",
     hdrs = ["systems/lcm_driven_loop.h"],
     deps = [
@@ -129,36 +143,19 @@ cc_binary(
     name = "quadrotor_sim",
     srcs = ["src/quadrotor_sim.cc"],
     data = [
+        "config/moving_target.yaml",
         "config/quadrotor_sim.yaml",
         "//UAV_models:uav_files",
     ],
     deps = [
         ":diagram_utils",
-        ":quadrotor_lcm_systems",
-        ":quadrotor_params",
-        ":quadrotor_plant",
-        ":quadrotor_sim_utils",
-        "//lcmtypes:uav_lcmtypes",
-        "@drake//common/yaml:yaml_io",
-        "@drake//systems/analysis:simulator",
-        "@drake//systems/framework",
-        "@drake//systems/lcm",
-        "@gflags//:gflags",
-    ],
-)
-
-cc_binary(
-    name = "moving_target_sim",
-    srcs = ["src/moving_target_sim.cc"],
-    data = [
-        "config/moving_target.yaml",
-        "//UAV_models:uav_files",
-    ],
-    deps = [
-        ":diagram_utils",
+        ":moving_target_controller_lib",
         ":moving_target_lcm_systems",
         ":moving_target_params",
         ":moving_target_plant",
+        ":quadrotor_lcm_systems",
+        ":quadrotor_params",
+        ":quadrotor_plant",
         ":quadrotor_sim_utils",
         "//lcmtypes:uav_lcmtypes",
         "@drake//common/yaml:yaml_io",
@@ -190,26 +187,6 @@ cc_binary(
 )
 
 cc_binary(
-    name = "moving_target_controller",
-    srcs = ["src/moving_target_controller.cc"],
-    data = ["config/moving_target.yaml"],
-    deps = [
-        ":diagram_utils",
-        ":lcm_driven_loop",
-        ":moving_target_controller_lib",
-        ":moving_target_lcm_systems",
-        ":moving_target_params",
-        ":quadrotor_sim_utils",
-        "//lcmtypes:uav_lcmtypes",
-        "@drake//common/yaml:yaml_io",
-        "@drake//lcm",
-        "@drake//systems/framework",
-        "@drake//systems/lcm",
-        "@gflags//:gflags",
-    ],
-)
-
-cc_binary(
     name = "moving_target_teleop",
     srcs = ["src/moving_target_teleop.cc"],
     data = ["config/moving_target.yaml"],
@@ -227,24 +204,6 @@ cc_binary(
     srcs = ["src/quadrotor_visualizer.cc"],
     data = [
         "config/quadrotor_sim.yaml",
-        "//UAV_models:uav_files",
-    ],
-    deps = [
-        ":diagram_utils",
-        ":quadrotor_lcm_systems",
-        ":quadrotor_params",
-        ":quadrotor_sim_utils",
-        "//lcmtypes:uav_lcmtypes",
-        "@drake//:drake_shared_library",
-        "@drake//common/yaml:yaml_io",
-        "@gflags//:gflags",
-    ],
-)
-
-cc_binary(
-    name = "moving_target_visualizer",
-    srcs = ["src/moving_target_visualizer.cc"],
-    data = [
         "config/moving_target.yaml",
         "//UAV_models:uav_files",
     ],
@@ -253,6 +212,8 @@ cc_binary(
         ":moving_target_lcm_systems",
         ":moving_target_params",
         ":moving_target_plant",
+        ":quadrotor_lcm_systems",
+        ":quadrotor_params",
         ":quadrotor_sim_utils",
         "//lcmtypes:uav_lcmtypes",
         "@drake//:drake_shared_library",
@@ -278,6 +239,7 @@ cc_binary(
         ":quadrotor_target_camera_visualizer_params",
         ":quadrotor_params",
         ":quadrotor_sim_utils",
+        ":raruco_detector",
         "//lcmtypes:uav_lcmtypes",
         "@drake//common/yaml:yaml_io",
         "@drake//geometry:drake_visualizer",
@@ -291,6 +253,7 @@ cc_binary(
         "@drake//systems/analysis:simulator",
         "@drake//systems/framework",
         "@drake//systems/lcm",
+        "@drake//systems/lcm:lcm_publisher_system",
         "@drake//systems/rendering:multibody_position_to_geometry_pose",
         "@drake//systems/sensors:camera_info",
         "@drake//systems/sensors:image_writer",

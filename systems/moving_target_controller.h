@@ -18,6 +18,7 @@ class MovingTargetController final : public drake::systems::LeafSystem<double> {
 
   const MovingTargetControllerParams params_;
   drake::systems::InputPortIndex teleop_port_;
+  drake::systems::InputPortIndex state_port_;
 };
 
 }  // namespace systems

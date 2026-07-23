@@ -1,0 +1,18 @@
+package uav_delivery;
+
+struct lcmt_raruco_detection {
+  int64_t utime;
+  int64_t timestamp_millis;
+  int8_t detected;
+  int32_t marker_id;
+  double confidence;
+  double mean_abs_error;
+  double center_u;
+  double center_v;
+  double polygon_area_px;
+  double normal_alignment;
+  double in_frame_fraction;
+  double corner_u[4];
+  double corner_v[4];
+  double position_C[3];
+}
