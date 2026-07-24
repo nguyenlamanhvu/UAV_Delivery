@@ -51,6 +51,39 @@ class Subscriber final {
   std::shared_ptr<drake::lcm::DrakeSubscriptionInterface> subscription_;
 };
 
+template <typename Message>
+class LatestMessagePortFixer final {
+ public:
+  DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(LatestMessagePortFixer);
+
+  LatestMessagePortFixer(drake::lcm::DrakeLcm* lcm,
+                         const std::string& channel,
+                         const drake::systems::LeafSystem<double>* system,
+                         int port_index,
+                         Message default_message = {})
+      : subscriber_(lcm, channel),
+        system_(system),
+        port_index_(port_index),
+        latest_message_(std::move(default_message)) {}
+
+  void FixInputPort(drake::systems::Diagram<double>* root,
+                    drake::systems::Context<double>* root_context) {
+    if (subscriber_.count() > 0) {
+      latest_message_ = subscriber_.message();
+      subscriber_.clear();
+    }
+    system_->get_input_port(port_index_).FixValue(
+        &root->GetMutableSubsystemContext(*system_, root_context),
+        latest_message_);
+  }
+
+ private:
+  Subscriber<Message> subscriber_;
+  const drake::systems::LeafSystem<double>* system_{};
+  int port_index_{};
+  Message latest_message_{};
+};
+
 template <typename Predicate>
 void LcmHandleSubscriptionsUntil(drake::lcm::DrakeLcm* lcm,
                                  Predicate done,
@@ -90,6 +123,30 @@ class LcmDrivenLoop {
 
   void Simulate(double end_time = std::numeric_limits<double>::infinity(),
                 std::function<bool()> should_stop = {}) {
+    SimulateWithCallback(end_time, should_stop, nullptr);
+  }
+
+  void SimulateWithCallback(
+      double end_time,
+      std::function<bool()> should_stop,
+      std::function<void(drake::systems::Diagram<double>*,
+                         drake::systems::Context<double>*)> pre_step) {
+    SimulateWithMessageCallback(
+        end_time, should_stop,
+        [&](const InputMessageType&, drake::systems::Diagram<double>* root,
+            drake::systems::Context<double>* root_context) {
+          if (pre_step) {
+            pre_step(root, root_context);
+          }
+        });
+  }
+
+  void SimulateWithMessageCallback(
+      double end_time,
+      std::function<bool()> should_stop,
+      std::function<void(const InputMessageType&,
+                         drake::systems::Diagram<double>*,
+                         drake::systems::Context<double>*)> pre_step) {
     auto& diagram_context = simulator_.get_mutable_context();
 
     std::cout << "Waiting for first LCM message on " << input_channel_
@@ -122,6 +179,10 @@ class LcmDrivenLoop {
             &diagram_ptr_->GetMutableSubsystemContext(*lcm_parser_,
                                                       &diagram_context),
             message);
+      }
+
+      if (pre_step) {
+        pre_step(message, diagram_ptr_, &diagram_context);
       }
 
       time = message.utime * 1e-6;

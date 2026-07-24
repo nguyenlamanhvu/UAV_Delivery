@@ -1,0 +1,17 @@
+package uav_delivery;
+
+struct lcmt_quadrotor_reference
+{
+  int64_t utime;
+
+  double position[3];
+  double velocity[3];
+  double acceleration[3];
+
+  // Rotation matrix from body frame to world fram
+  double rotation[9];
+
+  // Angular quantities are expressed in the body frame.
+  double body_angular_velocity[3];
+  double body_angular_acceleration[3];
+}
