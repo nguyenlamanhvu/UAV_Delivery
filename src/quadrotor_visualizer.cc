@@ -1,10 +1,16 @@
+#include <algorithm>
+#include <cmath>
 #include <csignal>
+#include <filesystem>
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <stdexcept>
+#include <string>
 #include <utility>
 
+#include <Eigen/Dense>
 #include <gflags/gflags.h>
 
 #include "drake/common/yaml/yaml_io.h"
@@ -12,9 +18,14 @@
 #include "drake/geometry/meshcat.h"
 #include "drake/geometry/meshcat_visualizer.h"
 #include "drake/geometry/meshcat_visualizer_params.h"
+#include "drake/geometry/render_gl/factory.h"
+#include "drake/geometry/render_gl/render_engine_gl_params.h"
+#include "drake/geometry/render_vtk/factory.h"
+#include "drake/geometry/render_vtk/render_engine_vtk_params.h"
 #include "drake/geometry/scene_graph.h"
 #include "drake/math/rigid_transform.h"
 #include "drake/math/roll_pitch_yaw.h"
+#include "drake/math/rotation_matrix.h"
 #include "drake/multibody/parsing/parser.h"
 #include "drake/multibody/plant/multibody_plant.h"
 #include "drake/multibody/tree/revolute_joint.h"
@@ -24,32 +35,46 @@
 #include "drake/systems/framework/diagram_builder.h"
 #include "drake/systems/framework/leaf_system.h"
 #include "drake/systems/lcm/lcm_interface_system.h"
+#include "drake/systems/lcm/lcm_publisher_system.h"
 #include "drake/systems/lcm/lcm_subscriber_system.h"
 #include "drake/systems/rendering/multibody_position_to_geometry_pose.h"
+#include "drake/systems/sensors/camera_info.h"
+#include "drake/systems/sensors/image_writer.h"
+#include "drake/systems/sensors/rgbd_sensor.h"
 #include "params/moving_target_params.h"
+#include "params/quadrotor_camera_visualizer_params.h"
 #include "params/quadrotor_params.h"
 #include "systems/diagram_utils.h"
 #include "systems/lcm_systems.h"
 #include "systems/moving_target_lcm_systems.h"
 #include "systems/moving_target_plant.h"
+#include "systems/raruco_detector.h"
 #include "systems/sim_utils.h"
 #include "uav_delivery/lcmt_moving_target_state.hpp"
 #include "uav_delivery/lcmt_quadrotor_state.hpp"
+#include "uav_delivery/lcmt_raruco_detection.hpp"
 
 DEFINE_string(config, "config/quadrotor_sim.yaml",
               "YAML file containing QuadrotorSimParams.");
 DEFINE_string(moving_target_config, "config/moving_target.yaml",
               "YAML file containing MovingTargetSimParams. The moving target is "
               "loaded into the same Meshcat scene as the quadrotor.");
+DEFINE_string(camera_config, "config/quadrotor_target_camera_visualizer.yaml",
+              "YAML file containing QuadrotorTargetCameraVisualizerParams.");
+DEFINE_bool(camera_render, false,
+            "Enable the onboard drone camera rendering and RArUco pipeline.");
 DEFINE_string(lcm_url,
               "udpm://239.255.76.67:7667?ttl=0",
               "LCM URL for this instance");
-DEFINE_int32(meshcat_port, 7000, "Port for Meshcat server.");
-DEFINE_double(visualizer_publish_rate, 60.0, "Meshcat publish rate in Hz.");
+DEFINE_int32(meshcat_port, 7000, "Port for Meshcat server when camera_render=false.");
+DEFINE_double(visualizer_publish_rate, 60.0,
+              "Meshcat publish rate in Hz when camera_render=false.");
 DEFINE_string(diagram_svg, "", "Optional path to write the system diagram SVG.");
 
 namespace uav_delivery {
 namespace {
+
+enum class EngineType { kVtk, kGl };
 
 class CombinedSceneStateToPosition final
     : public drake::systems::LeafSystem<double> {
@@ -92,11 +117,11 @@ class CombinedSceneStateToPosition final
     const Eigen::VectorXd moving_target_state =
         this->get_input_port(moving_target_state_port_).Eval(context);
 
-    const Eigen::Map<const Eigen::Matrix<double, 3, 3, Eigen::RowMajor>> R(
+    const Eigen::Map<const Eigen::Matrix<double, 3, 3, Eigen::RowMajor>> R_WQ(
         quadrotor_state.data() + 6);
-    const drake::math::RigidTransform<double> X_WB(
-        drake::math::RotationMatrix<double>(R), quadrotor_state.segment<3>(0));
-    plant_.SetFreeBodyPose(plant_context_.get(), quadrotor_body_, X_WB);
+    const drake::math::RigidTransform<double> X_WQ(
+        drake::math::RotationMatrix<double>(R_WQ), quadrotor_state.segment<3>(0));
+    plant_.SetFreeBodyPose(plant_context_.get(), quadrotor_body_, X_WQ);
 
     const drake::math::RigidTransform<double> X_WT(
         drake::math::RollPitchYaw<double>(0.0, 0.0, moving_target_state(2)),
@@ -122,14 +147,99 @@ class CombinedSceneStateToPosition final
   drake::systems::InputPortIndex moving_target_state_port_;
 };
 
+template <EngineType engine_type>
+std::unique_ptr<drake::geometry::render::RenderEngine> MakeEngine() {
+  if constexpr (engine_type == EngineType::kVtk) {
+    return drake::geometry::MakeRenderEngineVtk(
+        drake::geometry::RenderEngineVtkParams{});
+  }
+  return drake::geometry::MakeRenderEngineGl(
+      drake::geometry::RenderEngineGlParams{});
+}
+
+EngineType ParseRenderer(const std::string& renderer) {
+  if (renderer == "vtk") {
+    return EngineType::kVtk;
+  }
+  if (renderer == "gl") {
+    return EngineType::kGl;
+  }
+  throw std::runtime_error("Unsupported renderer='" + renderer +
+                           "'. Expected 'vtk' or 'gl'.");
+}
+
+drake::math::RigidTransformd MakeDroneCameraPose(
+    const DroneCameraRenderParams& params) {
+  const double pitch_rad = params.pitch_down_deg * M_PI / 180.0;
+  const Eigen::Vector3d look_direction(std::cos(pitch_rad), 0.0,
+                                       -std::sin(pitch_rad));
+  const Eigen::Vector3d down_reference(0.0, 0.0, -1.0);
+  Eigen::Vector3d camera_y =
+      down_reference - down_reference.dot(look_direction) * look_direction;
+  if (camera_y.norm() < 1e-8) {
+    camera_y = Eigen::Vector3d(0.0, -1.0, 0.0);
+  }
+  camera_y.normalize();
+  const Eigen::Vector3d camera_z = look_direction.normalized();
+  const Eigen::Vector3d camera_x = camera_y.cross(camera_z).normalized();
+
+  Eigen::Matrix3d rotation_matrix;
+  rotation_matrix.col(0) = camera_x;
+  rotation_matrix.col(1) = camera_y;
+  rotation_matrix.col(2) = camera_z;
+
+  return drake::math::RigidTransformd(
+      drake::math::RotationMatrix<double>(rotation_matrix), params.position);
+}
+
+std::string CameraOutputFormat(
+    const DroneCameraImageOutputParams& image_output_params) {
+  return image_output_params.output_dir + "/" + image_output_params.file_pattern;
+}
+
+std::string OverlayOutputFormat(
+    const DroneCameraAnnotatedOutputParams& overlay_output_params) {
+  return overlay_output_params.output_dir + "/" + overlay_output_params.file_pattern;
+}
+
+void WarmStartCamera(drake::systems::Diagram<double>* diagram,
+                     drake::systems::Context<double>* context,
+                     const drake::systems::sensors::RgbdSensor* camera,
+                     int warmup_frames) {
+  std::cout << "Warming up drone camera rendering pipeline..." << std::endl;
+  for (int frame = 0; frame < warmup_frames; ++frame) {
+    const auto& camera_context = diagram->GetSubsystemContext(*camera, *context);
+    const auto& color_image =
+        camera->color_image_output_port()
+            .Eval<drake::systems::sensors::ImageRgba8U>(camera_context);
+    std::cout << "  warmup frame " << (frame + 1) << "/" << warmup_frames
+              << " -> " << color_image.width() << "x" << color_image.height()
+              << std::endl;
+  }
+}
+
 int DoMain(int argc, char* argv[]) {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   std::signal(SIGINT, systems::HandleSigint);
 
-  const QuadrotorSimParams params =
+  const QuadrotorSimParams quadrotor_params =
       drake::yaml::LoadYamlFile<QuadrotorSimParams>(FLAGS_config);
   const MovingTargetSimParams moving_target_params =
       drake::yaml::LoadYamlFile<MovingTargetSimParams>(FLAGS_moving_target_config);
+
+  std::optional<QuadrotorTargetCameraVisualizerParams> camera_visualizer_params;
+  if (FLAGS_camera_render) {
+    camera_visualizer_params =
+        drake::yaml::LoadYamlFile<QuadrotorTargetCameraVisualizerParams>(
+            FLAGS_camera_config);
+    std::filesystem::create_directories(
+        camera_visualizer_params->image_output.output_dir);
+    if (camera_visualizer_params->detection.enabled &&
+        camera_visualizer_params->detection.overlay_output.enabled) {
+      std::filesystem::create_directories(
+          camera_visualizer_params->detection.overlay_output.output_dir);
+    }
+  }
 
   drake::systems::DiagramBuilder<double> builder;
   drake::multibody::MultibodyPlant<double> plant(0.0);
@@ -138,7 +248,7 @@ int DoMain(int argc, char* argv[]) {
 
   drake::multibody::Parser parser(&plant, scene_graph);
   parser.package_map().Add("uav_models", "UAV_models");
-  const auto quadrotor_instances = parser.AddModels(params.model);
+  const auto quadrotor_instances = parser.AddModels(quadrotor_params.model);
   const auto moving_target_instances = parser.AddModels(moving_target_params.model);
   if (quadrotor_instances.size() != 1 || moving_target_instances.size() != 1) {
     throw std::runtime_error(
@@ -150,10 +260,11 @@ int DoMain(int argc, char* argv[]) {
 
   auto* lcm =
       builder.AddSystem<drake::systems::lcm::LcmInterfaceSystem>(FLAGS_lcm_url);
-  auto* state_sub = builder.AddSystem(
+  auto* quadrotor_state_sub = builder.AddSystem(
       drake::systems::lcm::LcmSubscriberSystem::Make<lcmt_quadrotor_state>(
-          params.lcm_channels.state, lcm));
-  auto* state_receiver = builder.AddSystem<systems::QuadrotorStateReceiver>();
+          quadrotor_params.lcm_channels.state, lcm));
+  auto* quadrotor_state_receiver =
+      builder.AddSystem<systems::QuadrotorStateReceiver>();
   auto* moving_target_state_sub = builder.AddSystem(
       drake::systems::lcm::LcmSubscriberSystem::Make<lcmt_moving_target_state>(
           moving_target_params.lcm_channels.state, lcm));
@@ -164,8 +275,10 @@ int DoMain(int argc, char* argv[]) {
   auto* to_pose = builder.AddSystem<
       drake::systems::rendering::MultibodyPositionToGeometryPose<double>>(plant);
 
-  builder.Connect(state_sub->get_output_port(), state_receiver->get_input_port(0));
-  builder.Connect(state_receiver->get_output_port(0), state_to_q->get_input_port(0));
+  builder.Connect(quadrotor_state_sub->get_output_port(),
+                  quadrotor_state_receiver->get_input_port(0));
+  builder.Connect(quadrotor_state_receiver->get_output_port(0),
+                  state_to_q->get_input_port(0));
   builder.Connect(moving_target_state_sub->get_output_port(),
                   moving_target_state_receiver->get_input_port(0));
   builder.Connect(moving_target_state_receiver->get_output_port(0),
@@ -174,9 +287,93 @@ int DoMain(int argc, char* argv[]) {
   builder.Connect(to_pose->get_output_port(),
                   scene_graph->get_source_pose_port(plant.get_source_id().value()));
 
-  auto meshcat = std::make_shared<drake::geometry::Meshcat>(FLAGS_meshcat_port);
+  drake::systems::sensors::RgbdSensor* drone_camera = nullptr;
+  drake::math::RigidTransformd X_BC = drake::math::RigidTransformd::Identity();
+  if (camera_visualizer_params.has_value()) {
+    const std::string renderer_name = "drone_front_renderer";
+    switch (ParseRenderer(camera_visualizer_params->renderer)) {
+      case EngineType::kVtk:
+        scene_graph->AddRenderer(renderer_name, MakeEngine<EngineType::kVtk>());
+        break;
+      case EngineType::kGl:
+        scene_graph->AddRenderer(renderer_name, MakeEngine<EngineType::kGl>());
+        break;
+    }
+
+    const auto& camera_params = camera_visualizer_params->camera;
+    const drake::systems::sensors::CameraInfo camera_info(
+        camera_params.width, camera_params.height,
+        camera_params.fov_deg * M_PI / 180.0);
+    const drake::geometry::render::RenderCameraCore color_camera_core(
+        renderer_name, camera_info,
+        drake::geometry::render::ClippingRange{camera_params.near, camera_params.far},
+        drake::math::RigidTransformd::Identity());
+    const drake::geometry::render::ColorRenderCamera color_camera(
+        color_camera_core, false);
+    const drake::geometry::render::DepthRenderCamera depth_camera(
+        color_camera_core,
+        drake::geometry::render::DepthRange(camera_params.near, camera_params.far));
+    X_BC = MakeDroneCameraPose(camera_params);
+
+    drone_camera = builder.AddSystem<drake::systems::sensors::RgbdSensor>(
+        plant.GetBodyFrameIdOrThrow(
+            plant.GetBodyByName("base_link", quadrotor_instance).index()),
+        X_BC, color_camera, depth_camera);
+    builder.Connect(scene_graph->get_query_output_port(),
+                    drone_camera->query_object_input_port());
+
+    auto* image_writer = builder.AddSystem<drake::systems::sensors::ImageWriter>();
+    const auto& image_input = image_writer->DeclareImageInputPort(
+        drake::systems::sensors::PixelType::kRgba8U, "drone_front_camera",
+        CameraOutputFormat(camera_visualizer_params->image_output),
+        camera_visualizer_params->image_output.publish_period, 0.0);
+    builder.Connect(drone_camera->color_image_output_port(), image_input);
+
+    if (camera_visualizer_params->detection.enabled) {
+      auto* raruco_detector = builder.AddSystem<systems::ProjectedRArucoDetector>(
+          camera_visualizer_params->camera,
+          camera_visualizer_params->detection);
+      builder.Connect(quadrotor_state_receiver->get_output_port(0),
+                      raruco_detector->get_input_port(0));
+      builder.Connect(moving_target_state_receiver->get_output_port(0),
+                      raruco_detector->get_input_port(1));
+      builder.Connect(drone_camera->color_image_output_port(),
+                      raruco_detector->get_input_port(2));
+
+      auto* detection_pub = builder.AddSystem(
+          drake::systems::lcm::LcmPublisherSystem::Make<lcmt_raruco_detection>(
+              camera_visualizer_params->detection.lcm_channel, lcm,
+              camera_visualizer_params->detection.publish_period));
+      builder.Connect(raruco_detector->get_output_port(0),
+                      detection_pub->get_input_port());
+
+      if (camera_visualizer_params->detection.overlay_output.enabled) {
+        auto* overlay_writer =
+            builder.AddSystem<drake::systems::sensors::ImageWriter>();
+        const auto& overlay_input = overlay_writer->DeclareImageInputPort(
+            drake::systems::sensors::PixelType::kRgba8U,
+            "drone_front_camera_raruco_overlay",
+            OverlayOutputFormat(camera_visualizer_params->detection.overlay_output),
+            camera_visualizer_params->detection.overlay_output.publish_period, 0.0);
+        builder.Connect(raruco_detector->get_output_port(1), overlay_input);
+      }
+    }
+  }
+
+  const int meshcat_port = camera_visualizer_params.has_value()
+                               ? camera_visualizer_params->meshcat_port
+                               : FLAGS_meshcat_port;
+  const double visualizer_publish_rate = camera_visualizer_params.has_value()
+                                             ? camera_visualizer_params
+                                                   ->visualizer_publish_rate
+                                             : FLAGS_visualizer_publish_rate;
+
+  auto meshcat = std::make_shared<drake::geometry::Meshcat>(meshcat_port);
   drake::geometry::MeshcatVisualizerParams meshcat_params;
-  meshcat_params.publish_period = 1.0 / FLAGS_visualizer_publish_rate;
+  meshcat_params.publish_period = 1.0 / visualizer_publish_rate;
+  if (camera_visualizer_params.has_value()) {
+    meshcat_params.prefix = "/combined_scene";
+  }
   drake::geometry::MeshcatVisualizer<double>::AddToBuilder(
       &builder, *scene_graph, meshcat, std::move(meshcat_params));
   drake::geometry::DrakeVisualizer<double>::AddToBuilder(&builder, *scene_graph);
@@ -186,20 +383,47 @@ int DoMain(int argc, char* argv[]) {
   systems::MaybeWriteDiagramSvg(*diagram, FLAGS_diagram_svg);
   auto context = diagram->CreateDefaultContext();
 
-  std::cout << "Quadrotor visualizer config: " << FLAGS_config << "\n";
-  std::cout << "Moving target config: " << FLAGS_moving_target_config << "\n";
-  std::cout << "Quadrotor model: " << params.model << "\n";
-  std::cout << "Moving target model: " << moving_target_params.model << "\n";
-  std::cout << "Subscribing quadrotor state on " << params.lcm_channels.state
-            << "\n";
-  std::cout << "Subscribing moving target state on "
-            << moving_target_params.lcm_channels.state << "\n";
-  std::cout << "Meshcat: " << meshcat->web_url() << std::endl;
+  std::cout << "Quadrotor visualizer" << std::endl;
+  std::cout << "  quadrotor config: " << FLAGS_config << std::endl;
+  std::cout << "  moving target config: " << FLAGS_moving_target_config
+            << std::endl;
+  std::cout << "  camera_render: " << (FLAGS_camera_render ? "true" : "false")
+            << std::endl;
+  if (camera_visualizer_params.has_value()) {
+    std::cout << "  camera config: " << FLAGS_camera_config << std::endl;
+    std::cout << "  camera pose X_BC:\n" << X_BC.GetAsMatrix4() << std::endl;
+    std::cout << "  saving camera frames to: "
+              << CameraOutputFormat(camera_visualizer_params->image_output)
+              << std::endl;
+    if (camera_visualizer_params->detection.enabled) {
+      std::cout << "  RArUco marker id: "
+                << camera_visualizer_params->detection.marker.id << std::endl;
+      std::cout << "  RArUco channel: "
+                << camera_visualizer_params->detection.lcm_channel << std::endl;
+      if (camera_visualizer_params->detection.overlay_output.enabled) {
+        std::cout << "  saving RArUco overlay frames to: "
+                  << OverlayOutputFormat(
+                         camera_visualizer_params->detection.overlay_output)
+                  << std::endl;
+      }
+    }
+  }
+  std::cout << "  quadrotor state channel: "
+            << quadrotor_params.lcm_channels.state << std::endl;
+  std::cout << "  moving target state channel: "
+            << moving_target_params.lcm_channels.state << std::endl;
+  std::cout << "  Meshcat: " << meshcat->web_url() << std::endl;
+
+  if (camera_visualizer_params.has_value()) {
+    WarmStartCamera(diagram.get(), context.get(), drone_camera,
+                    camera_visualizer_params->camera.warmup_frames);
+  }
 
   drake::systems::Simulator<double> simulator(*diagram, std::move(context));
   simulator.set_publish_every_time_step(false);
   simulator.set_publish_at_initialization(false);
-  simulator.set_target_realtime_rate(params.realtime_rate);
+  simulator.set_target_realtime_rate(
+      std::max(quadrotor_params.realtime_rate, moving_target_params.realtime_rate));
   simulator.Initialize();
   simulator.AdvanceTo(std::numeric_limits<double>::infinity());
   return 0;

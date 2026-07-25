@@ -3,11 +3,13 @@
   <model name="campus">
     <static>true</static>
     <link name="campus_link">
+      <!-- Shifts the model by its calculated center (scaled by 1000) to place it at the world origin -->
+      <pose>-32.45 -24.75 -52.46 0 0 0</pose>
       <visual name="campus_visual">
         <geometry>
           <mesh>
             <uri>../UAV_models/env/scene.gltf</uri>
-            <!-- Scaled up 1000x, adjust these numbers if it's too big -->
+            <!-- Reverted to 1 1 1 to fit inside Meshcat's camera limits -->
             <scale>1000 1000 1000</scale>
           </mesh>
         </geometry>

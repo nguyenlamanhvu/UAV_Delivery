@@ -205,6 +205,7 @@ cc_binary(
     data = [
         "config/quadrotor_sim.yaml",
         "config/moving_target.yaml",
+        "config/quadrotor_target_camera_visualizer.yaml",
         "//UAV_models:uav_files",
     ],
     deps = [
@@ -215,32 +216,10 @@ cc_binary(
         ":quadrotor_lcm_systems",
         ":quadrotor_params",
         ":quadrotor_sim_utils",
-        "//lcmtypes:uav_lcmtypes",
-        "@drake//:drake_shared_library",
-        "@drake//common/yaml:yaml_io",
-        "@gflags//:gflags",
-    ],
-)
-
-cc_binary(
-    name = "quadrotor_target_camera_visualizer",
-    srcs = ["src/quadrotor_target_camera_visualizer.cc"],
-    data = [
-        "config/quadrotor_sim.yaml",
-        "config/moving_target.yaml",
-        "config/quadrotor_target_camera_visualizer.yaml",
-        "//UAV_models:uav_files",
-    ],
-    deps = [
-        ":diagram_utils",
-        ":moving_target_lcm_systems",
-        ":moving_target_params",
-        ":quadrotor_lcm_systems",
         ":quadrotor_target_camera_visualizer_params",
-        ":quadrotor_params",
-        ":quadrotor_sim_utils",
         ":raruco_detector",
         "//lcmtypes:uav_lcmtypes",
+        "@drake//:drake_shared_library",
         "@drake//common/yaml:yaml_io",
         "@drake//geometry:drake_visualizer",
         "@drake//geometry:meshcat",
@@ -261,3 +240,4 @@ cc_binary(
         "@gflags//:gflags",
     ],
 )
+
