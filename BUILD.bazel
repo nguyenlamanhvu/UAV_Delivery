@@ -30,16 +30,6 @@ cc_library(
 )
 
 cc_library(
-    name = "quadrotor_plant",
-    srcs = ["systems/quadrotor_plant.cc"],
-    hdrs = ["systems/quadrotor_plant.h"],
-    deps = [
-        ":quadrotor_params",
-        "@drake//systems/framework",
-    ],
-)
-
-cc_library(
     name = "moving_target_plant",
     srcs = ["systems/moving_target_plant.cc"],
     hdrs = ["systems/moving_target_plant.h"],
@@ -155,10 +145,13 @@ cc_binary(
         ":moving_target_plant",
         ":quadrotor_lcm_systems",
         ":quadrotor_params",
-        ":quadrotor_plant",
         ":quadrotor_sim_utils",
         "//lcmtypes:uav_lcmtypes",
         "@drake//common/yaml:yaml_io",
+        "@drake//math",
+        "@drake//multibody/parsing",
+        "@drake//multibody/plant",
+        "@drake//multibody/tree",
         "@drake//systems/analysis:simulator",
         "@drake//systems/framework",
         "@drake//systems/lcm",
@@ -240,4 +233,3 @@ cc_binary(
         "@gflags//:gflags",
     ],
 )
-

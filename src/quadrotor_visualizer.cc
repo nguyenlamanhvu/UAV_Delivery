@@ -69,7 +69,7 @@ DEFINE_string(lcm_url,
 DEFINE_int32(meshcat_port, 7000, "Port for Meshcat server when camera_render=false.");
 DEFINE_double(visualizer_publish_rate, 60.0,
               "Meshcat publish rate in Hz when camera_render=false.");
-DEFINE_string(diagram_svg, "", "Optional path to write the system diagram SVG.");
+DEFINE_string(diagram_svg, "", "Path or directory for the system diagram SVG.");
 
 namespace uav_delivery {
 namespace {
@@ -380,7 +380,7 @@ int DoMain(int argc, char* argv[]) {
   builder.AddSystem<systems::SimTerminator>();
 
   auto diagram = builder.Build();
-  systems::MaybeWriteDiagramSvg(*diagram, FLAGS_diagram_svg);
+  systems::MaybeWriteDiagramSvg(*diagram, FLAGS_diagram_svg, argv[0]);
   auto context = diagram->CreateDefaultContext();
 
   std::cout << "Quadrotor visualizer" << std::endl;
