@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <set>
 #include <utility>
 
 namespace uav_delivery {
@@ -15,7 +16,8 @@ MovingTargetPlant::MovingTargetPlant(MovingTargetPlantParams params)
   this->DeclareContinuousState(kStateSize);
   this->DeclareVectorOutputPort("state",
                                 drake::systems::BasicVector<double>(kStateSize),
-                                &MovingTargetPlant::CopyState);
+                                &MovingTargetPlant::CopyState,
+                                {this->all_state_ticket()});
 }
 
 const drake::systems::InputPort<double>& MovingTargetPlant::get_command_input_port()

@@ -24,16 +24,29 @@ void MovingTargetController::CalcDriveTorques(
     drake::systems::BasicVector<double>* output) const {
   const Eigen::VectorXd cmd = this->get_input_port(teleop_port_).Eval(context);
   const Eigen::VectorXd state = this->get_input_port(state_port_).Eval(context);
-  (void)state;
+
   const double throttle = std::clamp(cmd(0), -1.0, 1.0);
   const double turn = std::clamp(cmd(1), -1.0, 1.0);
   const bool stop = cmd(2) > 0.5;
 
+  const double forward_speed = state(3);
+  const double yaw_rate = state(4);
+
   double left = 0.0;
   double right = 0.0;
   if (!stop) {
-    left = params_.throttle_gain * throttle - params_.turn_gain * turn;
-    right = params_.throttle_gain * throttle + params_.turn_gain * turn;
+    const double desired_forward_speed =
+        params_.max_forward_speed * throttle;
+    const double desired_yaw_rate = params_.max_yaw_rate * turn;
+
+    const double speed_error = desired_forward_speed - forward_speed;
+    const double yaw_rate_error = desired_yaw_rate - yaw_rate;
+
+    const double total_drive = params_.throttle_gain * speed_error;
+    const double differential_drive = params_.turn_gain * yaw_rate_error;
+
+    left = total_drive - differential_drive;
+    right = total_drive + differential_drive;
     left = std::clamp(left, -params_.max_drive_torque, params_.max_drive_torque);
     right = std::clamp(right, -params_.max_drive_torque, params_.max_drive_torque);
   }

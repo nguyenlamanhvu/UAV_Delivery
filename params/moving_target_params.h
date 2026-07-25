@@ -56,12 +56,16 @@ struct MovingTargetInitialState {
 };
 
 struct MovingTargetControllerParams {
+  double max_forward_speed{3.0};
+  double max_yaw_rate{1.5};
   double throttle_gain{10.0};
   double turn_gain{6.0};
   double max_drive_torque{12.0};
 
   template <typename Archive>
   void Serialize(Archive* a) {
+    a->Visit(DRAKE_NVP(max_forward_speed));
+    a->Visit(DRAKE_NVP(max_yaw_rate));
     a->Visit(DRAKE_NVP(throttle_gain));
     a->Visit(DRAKE_NVP(turn_gain));
     a->Visit(DRAKE_NVP(max_drive_torque));

@@ -1,5 +1,6 @@
 #include <csignal>
 #include <iostream>
+#include <limits>
 #include <utility>
 
 #include <gflags/gflags.h>
@@ -34,6 +35,10 @@ DEFINE_string(lcm_url,
               "udpm://239.255.76.67:7667?ttl=0",
               "LCM URL for this instance");
 DEFINE_string(diagram_svg, "", "Optional path to write the system diagram SVG.");
+DEFINE_bool(no_console_log, false,
+            "Disable console state logging regardless of YAML config.");
+DEFINE_bool(run_forever, false,
+            "Advance simulator to infinity instead of params.sim_time.");
 
 namespace uav_delivery {
 namespace {
@@ -104,6 +109,10 @@ int DoMain(int argc, char* argv[]) {
           params.lcm_channels.sim_time, lcm, 1.0 / params.publish_rate));
   builder.Connect(sim_time_sender->get_output_port(0), sim_time_pub->get_input_port());
 
+  if (FLAGS_no_console_log) {
+    params.console_log = false;
+  }
+
   if (params.console_log) {
     auto* console_logger = builder.AddSystem<systems::ConsoleLogger>(
         systems::QuadrotorPlant::kStateSize, params.console_period);
@@ -140,7 +149,11 @@ int DoMain(int argc, char* argv[]) {
   simulator.set_publish_at_initialization(false);
   simulator.set_target_realtime_rate(params.realtime_rate);
   simulator.Initialize();
-  simulator.AdvanceTo(params.sim_time);
+  if (FLAGS_run_forever) {
+    simulator.AdvanceTo(std::numeric_limits<double>::infinity());
+  } else {
+    simulator.AdvanceTo(params.sim_time);
+  }
   return 0;
 }
 

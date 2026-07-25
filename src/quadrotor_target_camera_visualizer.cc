@@ -195,7 +195,7 @@ std::string OverlayOutputFormat(
 
 void WarmStartCamera(drake::systems::Diagram<double>* diagram,
                      drake::systems::Context<double>* context,
-                     const drake::systems::sensors::RgbdSensor<double>* camera,
+                     const drake::systems::sensors::RgbdSensor* camera,
                      int warmup_frames) {
   std::cout << "Warming up drone camera rendering pipeline..." << std::endl;
   for (int frame = 0; frame < warmup_frames; ++frame) {
