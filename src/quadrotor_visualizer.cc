@@ -311,7 +311,8 @@ int DoMain(int argc, char* argv[]) {
       fps = std::max(1, static_cast<int>(1.0 / camera_visualizer_params->image_output.publish_period));
     }
     auto* uav_image_system = builder.AddSystem<UavImageSystem>(
-        fps, camera_params.width, camera_params.height, 1, 
+        fps, camera_params.width, camera_params.height,
+        drake::systems::sensors::ImageRgba8U::kNumChannels, 1,
         "127.0.0.1", "8554", false);
     builder.Connect(drone_camera->color_image_output_port(),
                     uav_image_system->get_input_port_image_1());
