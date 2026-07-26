@@ -2,22 +2,22 @@
 
 RtspServer::RtspServer() {}
 
-RtspServer::RtspServer(const uint16_t& height, const uint16_t& width, const uint8_t& step,
+RtspServer::RtspServer(const uint16_t& height, const uint16_t& width, const uint8_t& channels,
                        const uint8_t& camera_number, const uint16_t& frequency,
                        const std::string& address, const std::string& port)
-    : height_(height), width_(width), step_(step), camera_number_(camera_number), 
+    : height_(height), width_(width), channels_(channels), camera_number_(camera_number), 
       frequency_(frequency), image_data_(camera_number), image_data_mutex_(camera_number), 
       timestamp_(camera_number), seq_id_(camera_number),timestamp_mutex_(camera_number), 
       new_frame_available_(camera_number, false), frame_cv_(camera_number), frame_cv_mutex_(camera_number),
       loop_(nullptr), server_address_(address), server_port_(port) {
     
-    if (0 >= height_ || 0 >= width_ || 0 >= step_ || 0 >= camera_number ||0 >= frequency_ ) {
+    if (0 >= height_ || 0 >= width_ || 0 >= channels_ || 0 >= camera_number ||0 >= frequency_ ) {
         g_error("Image parameters, image channel, camera number and frequency must be higher than zero\n");
     }
 
     // Initialize the drake image values to black
     for (int i = 0; i < camera_number_; ++i) {
-        image_data_[i].resize(height_ * width_ * step_, 0);
+        image_data_[i].resize(height_ * width_ * channels_, 0);
     }
 }
 
@@ -35,7 +35,7 @@ void RtspServer::updateImageValue(const uint8_t& camera_number, const std::vecto
         return;
     }
     
-    if (height_ * width_ * step_ != image_data.size()) {
+    if (height_ * width_ * channels_ != image_data.size()) {
         g_printerr("updateImageValue: invalid image size of camera %u\n", camera_number);
         return;
     }

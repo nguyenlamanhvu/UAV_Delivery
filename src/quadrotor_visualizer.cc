@@ -306,6 +306,13 @@ int DoMain(int argc, char* argv[]) {
     builder.Connect(scene_graph->get_query_output_port(),
                     drone_camera->query_object_input_port());
 
+    auto* image_writer = builder.AddSystem<drake::systems::sensors::ImageWriter>();
+    const auto& image_input = image_writer->DeclareImageInputPort(
+        drake::systems::sensors::PixelType::kRgba8U, "drone_front_camera",
+        CameraOutputFormat(camera_visualizer_params->image_output),
+        camera_visualizer_params->image_output.publish_period, 0.0);
+    builder.Connect(drone_camera->color_image_output_port(), image_input);
+
     int fps = 30; // 30 Hz default for gstreamer
     if (camera_visualizer_params->image_output.publish_period > 0.0) {
       fps = std::max(1, static_cast<int>(1.0 / camera_visualizer_params->image_output.publish_period));
