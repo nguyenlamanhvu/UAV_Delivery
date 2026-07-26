@@ -58,9 +58,10 @@ namespace {
 
 class MultibodyQuadrotorState final : public drake::systems::LeafSystem<double> {
  public:
-  MultibodyQuadrotorState() {
+  explicit MultibodyQuadrotorState(int multibody_state_size,
+                                   int num_positions) : num_positions_(num_positions) {
     state_port_ = this->DeclareVectorInputPort(
-        "multibody_state", drake::systems::BasicVector<double>(13))
+        "multibody_state", drake::systems::BasicVector<double>(multibody_state_size))
                       .get_index();
     this->DeclareVectorOutputPort("quadrotor_state",
                                   drake::systems::BasicVector<double>(18),
@@ -73,17 +74,19 @@ class MultibodyQuadrotorState final : public drake::systems::LeafSystem<double> 
     const Eigen::VectorXd x = this->get_input_port(state_port_).Eval(context);
     const Eigen::Quaterniond q(x(0), x(1), x(2), x(3));
     const Eigen::Matrix3d R = q.normalized().toRotationMatrix();
+    const int velocity_offset = num_positions_;
 
     Eigen::VectorXd state = Eigen::VectorXd::Zero(18);
     state.segment<3>(0) = x.segment<3>(4);
-    state.segment<3>(3) = x.segment<3>(10);
+    state.segment<3>(3) = x.segment<3>(velocity_offset + 3);
     Eigen::Map<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>>(state.data() + 6) =
         R;
-    state.segment<3>(15) = x.segment<3>(7);
+    state.segment<3>(15) = x.segment<3>(velocity_offset);
     output->SetFromVector(state);
   }
 
   drake::systems::InputPortIndex state_port_;
+  int num_positions_{};
 };
 
 int DoMain(int argc, char* argv[]) {
@@ -167,7 +170,8 @@ int DoMain(int argc, char* argv[]) {
                   moving_target->get_command_input_port());
 
   auto* state_sender = builder.AddSystem<systems::QuadrotorStateSender>();
-  auto* state_converter = builder.AddSystem<MultibodyQuadrotorState>();
+  auto* state_converter = builder.AddSystem<MultibodyQuadrotorState>(
+      plant->num_multibody_states(model_instance), plant->num_positions(model_instance));
   builder.Connect(plant->get_state_output_port(model_instance),
                   state_converter->get_input_port(0));
   builder.Connect(state_converter->get_output_port(0),

@@ -41,6 +41,7 @@
 #include "drake/systems/sensors/camera_info.h"
 #include "drake/systems/sensors/image_writer.h"
 #include "drake/systems/sensors/rgbd_sensor.h"
+#include "systems/uav_image_system.h"
 #include "params/moving_target_params.h"
 #include "params/quadrotor_camera_visualizer_params.h"
 #include "params/quadrotor_params.h"
@@ -82,10 +83,14 @@ class CombinedSceneStateToPosition final
   CombinedSceneStateToPosition(
       const drake::multibody::MultibodyPlant<double>& plant,
       drake::multibody::ModelInstanceIndex quadrotor_instance,
-      drake::multibody::ModelInstanceIndex moving_target_instance)
+      drake::multibody::ModelInstanceIndex moving_target_instance,
+      double camera_pitch_rad)
       : plant_(plant),
         quadrotor_body_(plant.GetBodyByName("base_link", quadrotor_instance)),
         moving_target_body_(plant.GetBodyByName("base_link", moving_target_instance)),
+        camera_pitch_joint_(plant.GetJointByName<drake::multibody::RevoluteJoint>(
+            "camera_pitch_joint", quadrotor_instance)),
+        camera_pitch_rad_(camera_pitch_rad),
         front_left_(plant.GetJointByName<drake::multibody::RevoluteJoint>(
             "front_left_wheel_joint", moving_target_instance)),
         front_right_(plant.GetJointByName<drake::multibody::RevoluteJoint>(
@@ -122,6 +127,7 @@ class CombinedSceneStateToPosition final
     const drake::math::RigidTransform<double> X_WQ(
         drake::math::RotationMatrix<double>(R_WQ), quadrotor_state.segment<3>(0));
     plant_.SetFreeBodyPose(plant_context_.get(), quadrotor_body_, X_WQ);
+    camera_pitch_joint_.set_angle(plant_context_.get(), camera_pitch_rad_);
 
     const drake::math::RigidTransform<double> X_WT(
         drake::math::RollPitchYaw<double>(0.0, 0.0, moving_target_state(2)),
@@ -138,6 +144,8 @@ class CombinedSceneStateToPosition final
   const drake::multibody::MultibodyPlant<double>& plant_;
   const drake::multibody::RigidBody<double>& quadrotor_body_;
   const drake::multibody::RigidBody<double>& moving_target_body_;
+  const drake::multibody::RevoluteJoint<double>& camera_pitch_joint_;
+  const double camera_pitch_rad_;
   const drake::multibody::RevoluteJoint<double>& front_left_;
   const drake::multibody::RevoluteJoint<double>& front_right_;
   const drake::multibody::RevoluteJoint<double>& rear_left_;
@@ -166,30 +174,6 @@ EngineType ParseRenderer(const std::string& renderer) {
   }
   throw std::runtime_error("Unsupported renderer='" + renderer +
                            "'. Expected 'vtk' or 'gl'.");
-}
-
-drake::math::RigidTransformd MakeDroneCameraPose(
-    const DroneCameraRenderParams& params) {
-  const double pitch_rad = params.pitch_down_deg * M_PI / 180.0;
-  const Eigen::Vector3d look_direction(std::cos(pitch_rad), 0.0,
-                                       -std::sin(pitch_rad));
-  const Eigen::Vector3d down_reference(0.0, 0.0, -1.0);
-  Eigen::Vector3d camera_y =
-      down_reference - down_reference.dot(look_direction) * look_direction;
-  if (camera_y.norm() < 1e-8) {
-    camera_y = Eigen::Vector3d(0.0, -1.0, 0.0);
-  }
-  camera_y.normalize();
-  const Eigen::Vector3d camera_z = look_direction.normalized();
-  const Eigen::Vector3d camera_x = camera_y.cross(camera_z).normalized();
-
-  Eigen::Matrix3d rotation_matrix;
-  rotation_matrix.col(0) = camera_x;
-  rotation_matrix.col(1) = camera_y;
-  rotation_matrix.col(2) = camera_z;
-
-  return drake::math::RigidTransformd(
-      drake::math::RotationMatrix<double>(rotation_matrix), params.position);
 }
 
 std::string CameraOutputFormat(
@@ -271,7 +255,10 @@ int DoMain(int argc, char* argv[]) {
   auto* moving_target_state_receiver =
       builder.AddSystem<systems::MovingTargetStateReceiver>();
   auto* state_to_q = builder.AddSystem<CombinedSceneStateToPosition>(
-      plant, quadrotor_instance, moving_target_instance);
+      plant, quadrotor_instance, moving_target_instance,
+      camera_visualizer_params.has_value()
+          ? camera_visualizer_params->camera.pitch_down_deg * M_PI / 180.0
+          : 0.0);
   auto* to_pose = builder.AddSystem<
       drake::systems::rendering::MultibodyPositionToGeometryPose<double>>(plant);
 
@@ -288,7 +275,6 @@ int DoMain(int argc, char* argv[]) {
                   scene_graph->get_source_pose_port(plant.get_source_id().value()));
 
   drake::systems::sensors::RgbdSensor* drone_camera = nullptr;
-  drake::math::RigidTransformd X_BC = drake::math::RigidTransformd::Identity();
   if (camera_visualizer_params.has_value()) {
     const std::string renderer_name = "drone_front_renderer";
     switch (ParseRenderer(camera_visualizer_params->renderer)) {
@@ -313,21 +299,22 @@ int DoMain(int argc, char* argv[]) {
     const drake::geometry::render::DepthRenderCamera depth_camera(
         color_camera_core,
         drake::geometry::render::DepthRange(camera_params.near, camera_params.far));
-    X_BC = MakeDroneCameraPose(camera_params);
-
     drone_camera = builder.AddSystem<drake::systems::sensors::RgbdSensor>(
         plant.GetBodyFrameIdOrThrow(
-            plant.GetBodyByName("base_link", quadrotor_instance).index()),
-        X_BC, color_camera, depth_camera);
+            plant.GetBodyByName("camera_link", quadrotor_instance).index()),
+        drake::math::RigidTransformd::Identity(), color_camera, depth_camera);
     builder.Connect(scene_graph->get_query_output_port(),
                     drone_camera->query_object_input_port());
 
-    auto* image_writer = builder.AddSystem<drake::systems::sensors::ImageWriter>();
-    const auto& image_input = image_writer->DeclareImageInputPort(
-        drake::systems::sensors::PixelType::kRgba8U, "drone_front_camera",
-        CameraOutputFormat(camera_visualizer_params->image_output),
-        camera_visualizer_params->image_output.publish_period, 0.0);
-    builder.Connect(drone_camera->color_image_output_port(), image_input);
+    int fps = 30; // 30 Hz default for gstreamer
+    if (camera_visualizer_params->image_output.publish_period > 0.0) {
+      fps = std::max(1, static_cast<int>(1.0 / camera_visualizer_params->image_output.publish_period));
+    }
+    auto* uav_image_system = builder.AddSystem<UavImageSystem>(
+        fps, camera_params.width, camera_params.height, 1, 
+        "127.0.0.1", "8554", false);
+    builder.Connect(drone_camera->color_image_output_port(),
+                    uav_image_system->get_input_port_image_1());
 
     if (camera_visualizer_params->detection.enabled) {
       auto* raruco_detector = builder.AddSystem<systems::ProjectedRArucoDetector>(
@@ -355,7 +342,7 @@ int DoMain(int argc, char* argv[]) {
             "drone_front_camera_raruco_overlay",
             OverlayOutputFormat(camera_visualizer_params->detection.overlay_output),
             camera_visualizer_params->detection.overlay_output.publish_period, 0.0);
-        builder.Connect(raruco_detector->get_output_port(1), overlay_input);
+      builder.Connect(raruco_detector->get_output_port(1), overlay_input);
       }
     }
   }
@@ -391,7 +378,9 @@ int DoMain(int argc, char* argv[]) {
             << std::endl;
   if (camera_visualizer_params.has_value()) {
     std::cout << "  camera config: " << FLAGS_camera_config << std::endl;
-    std::cout << "  camera pose X_BC:\n" << X_BC.GetAsMatrix4() << std::endl;
+    std::cout << "  camera body link: camera_link" << std::endl;
+    std::cout << "  camera pitch joint angle [deg]: "
+              << camera_visualizer_params->camera.pitch_down_deg << std::endl;
     std::cout << "  saving camera frames to: "
               << CameraOutputFormat(camera_visualizer_params->image_output)
               << std::endl;
