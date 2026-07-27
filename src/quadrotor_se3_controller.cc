@@ -8,12 +8,14 @@
 #include "drake/common/yaml/yaml_io.h"
 #include "drake/systems/framework/diagram_builder.h"
 #include "drake/systems/lcm/lcm_publisher_system.h"
+#include "drake/systems/lcm/lcm_subscriber_system.h"
 #include "params/quadrotor_params.h"
 #include "systems/diagram_utils.h"
 #include "systems/lcm_driven_loop.h"
 #include "systems/se3_controller.h"
 #include "systems/sim_utils.h"
 #include "uav_delivery/lcmt_quadrotor_command.hpp"
+#include "uav_delivery/lcmt_quadrotor_setpoint.hpp"
 #include "uav_delivery/lcmt_quadrotor_state.hpp"
 
 DEFINE_string(config, "config/quadrotor_sim.yaml",
@@ -36,19 +38,25 @@ int DoMain(int argc, char* argv[]) {
 
   drake::systems::DiagramBuilder<double> builder;
   auto* controller = builder.AddSystem<systems::Se3Controller>(params);
+  auto* setpoint_sub = builder.AddSystem(
+      drake::systems::lcm::LcmSubscriberSystem::Make<lcmt_quadrotor_setpoint>(
+          params.lcm_channels.setpoint, &lcm));
   auto* command_pub = builder.AddSystem(
       drake::systems::lcm::LcmPublisherSystem::Make<lcmt_quadrotor_command>(
           params.lcm_channels.command, &lcm,
           {drake::systems::TriggerType::kForced}));
 
+  builder.Connect(setpoint_sub->get_output_port(), controller->get_input_port(1));
   builder.Connect(controller->get_output_port(0), command_pub->get_input_port());
   builder.AddSystem<systems::SimTerminator>();
 
   std::shared_ptr<drake::systems::Diagram<double>> diagram(builder.Build());
   systems::MaybeWriteDiagramSvg(*diagram, FLAGS_diagram_svg, argv[0]);
 
-  std::cout << "Quadrotor SE(3) controller config: " << FLAGS_config << "\n";
+  std::cout << "Quadrotor robust velocity controller config: " << FLAGS_config
+            << "\n";
   std::cout << "Subscribing state on " << params.lcm_channels.state << "\n";
+  std::cout << "Subscribing setpoint on " << params.lcm_channels.setpoint << "\n";
   std::cout << "Publishing command on " << params.lcm_channels.command << "\n";
 
   systems::LcmDrivenLoop<lcmt_quadrotor_state> loop(

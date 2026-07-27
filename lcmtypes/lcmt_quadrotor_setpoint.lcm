@@ -1,0 +1,15 @@
+package uav_delivery;
+
+struct lcmt_quadrotor_setpoint {
+    int64_t utime;
+
+    // 0 = position-driven, 1 = pure velocity, 2 = direct attitude/thrust-compatible feedforward mode
+    int8_t mode;
+
+    double position[3];
+    double velocity[3];
+    double acceleration[3];
+
+    double yaw;
+    double yaw_rate;
+}

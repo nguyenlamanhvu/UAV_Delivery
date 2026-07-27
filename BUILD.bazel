@@ -201,8 +201,14 @@ cc_binary(
         "config/quadrotor_target_camera_visualizer.yaml",
         "//UAV_models:uav_files",
     ],
-    deps = [
+        copts = [
+        "-Wp,-I/usr/include/gstreamer-1.0",
+        "-Wp,-I/usr/include/glib-2.0",
+        "-Wp,-I/usr/lib/x86_64-linux-gnu/glib-2.0/include",
+    ],
+deps = [
         ":diagram_utils",
+        ":uav_image_system",
         ":moving_target_lcm_systems",
         ":moving_target_params",
         ":moving_target_plant",
@@ -231,5 +237,46 @@ cc_binary(
         "@drake//systems/sensors:image_writer",
         "@drake//systems/sensors:rgbd_sensor",
         "@gflags//:gflags",
+    ],
+)
+
+cc_library(
+    name = "gstreamer_rtsp_server",
+    srcs = ["systems/gstreamer/rtsp_server.cc"],
+    hdrs = ["systems/gstreamer/rtsp_server.h"],
+    copts = [
+        "-Wp,-I/usr/include/gstreamer-1.0",
+        "-Wp,-I/usr/include/glib-2.0",
+        "-Wp,-I/usr/lib/x86_64-linux-gnu/glib-2.0/include",
+        "-Wp,-I/usr/include/x86_64-linux-gnu",
+    ],
+    linkopts = [
+        "-lgstrtspserver-1.0",
+        "-lgstreamer-1.0",
+        "-lgobject-2.0",
+        "-lglib-2.0",
+        "-lgstrtp-1.0",
+        "-lgstapp-1.0",
+        "-pthread",
+    ],
+)
+
+cc_library(
+    name = "uav_image_system",
+    srcs = ["systems/uav_image_system.cc"],
+    hdrs = ["systems/uav_image_system.h"],
+    deps = [
+        ":gstreamer_rtsp_server",
+        "@drake//common:value",
+        "@drake//systems/framework",
+        "@drake//systems/sensors:image",
+        "@drake//systems/sensors:image_writer",
+        "//lcmtypes:uav_lcmtypes",
+    ],
+    copts = [
+        "-Wp,-I/usr/include/gstreamer-1.0",
+        "-Wp,-I/usr/include/glib-2.0",
+        "-Wp,-I/usr/lib/x86_64-linux-gnu/glib-2.0/include",
+        "-Wp,-I/usr/include/x86_64-linux-gnu",
     ],
 )

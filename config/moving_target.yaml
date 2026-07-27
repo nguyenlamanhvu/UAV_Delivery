@@ -37,6 +37,6 @@ actor:
   meshcat_root: "/actors/moving_target"
 publish_rate: 60.0
 realtime_rate: 1.0
-sim_time: 30.0
+sim_time: 999999.0
 console_log: true
 console_period: 0.25
