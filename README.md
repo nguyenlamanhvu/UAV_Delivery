@@ -40,7 +40,17 @@ now combines:
   renderer, output paths, and RArUco thresholds.
 - `systems/raruco_detector.*`: onboard camera verification and detection
   publisher.
+- `systems/uav_image_system.*`: image writer + RTSP streaming bridge for the
+  onboard camera feed.
 - `UAV_models/moving_target/raruco_depth2_id0.png`: roof marker texture.
+
+### Helper scripts
+- `scripts/web_teleop/teleop_server.py`: publishes `UAV_QUADROTOR_SETPOINT`
+  from a simple HTTP teleop endpoint on port `8082`.
+- `scripts/simulate_joystick.py`: tiny HTTP client that repeatedly posts test
+  commands to the web teleop server.
+- `scripts/debug_lcm.py`: subscribes to `UAV_QUADROTOR_STATE` and
+  `UAV_QUADROTOR_SETPOINT` for quick inspection.
 
 ### Shared assets and messages
 - `UAV_models/`: quadrotor, moving-target, and environment assets.
@@ -95,6 +105,10 @@ env -u LD_LIBRARY_PATH bazel run //:quadrotor_se3_controller -- \
   --config=config/quadrotor_sim.yaml
 ```
 
+The controller subscribes to both `UAV_QUADROTOR_STATE` and
+`UAV_QUADROTOR_SETPOINT`. The repo currently includes Python helper scripts for
+publishing setpoints, not a dedicated Bazel-built setpoint publisher binary.
+
 ### Terminal 3: optional LCM inspection
 
 ```bash
@@ -108,6 +122,9 @@ env -u LD_LIBRARY_PATH bazel run //:quadrotor_visualizer -- \
   --config=config/quadrotor_sim.yaml \
   --moving_target_config=config/moving_target.yaml
 ```
+
+This starts a Meshcat server and prints the URL on startup. Without
+`--camera_render`, the default Meshcat port is `7000`.
 
 ### Terminal 4 alternative: shared visualizer with onboard camera rendering
 
@@ -123,6 +140,10 @@ Outputs in camera mode:
 - raw frames: `/tmp/uav_delivery/drone_front_camera/`
 - RArUco overlays: `/tmp/uav_delivery/drone_front_camera_raruco/`
 - detection LCM: `UAV_RARUCO_DETECTION`
+- RTSP stream: `rtsp://127.0.0.1:8554/Drake_camera_1`
+
+With `--camera_render`, Meshcat uses the port from
+`config/quadrotor_target_camera_visualizer.yaml` which is currently `7002`.
 
 ### Terminal 5: moving target teleop
 
@@ -136,6 +157,25 @@ Teleop keys:
 - `A/D` or `Left/Right`: turn
 - `Space`: stop
 - `Q`: quit
+
+`moving_target_teleop` can start without a TTY, but keyboard control only works
+from an interactive terminal.
+
+### Optional Terminal 6: quadrotor web teleop helper
+
+```bash
+cd scripts/web_teleop
+python3 teleop_server.py
+```
+
+This serves `index.html` and publishes `UAV_QUADROTOR_SETPOINT` from HTTP
+commands on port `8082`.
+
+### Optional Terminal 7: debug quadrotor state and setpoint traffic
+
+```bash
+PYTHONPATH=scripts/web_teleop python3 scripts/debug_lcm.py
+```
 
 ## Diagram SVG output
 
@@ -155,6 +195,7 @@ Graphviz `dot` is unavailable, the code still writes a `.dot` file.
 ### Quadrotor
 - `UAV_QUADROTOR_STATE`: `uav_delivery.lcmt_quadrotor_state`
 - `UAV_QUADROTOR_COMMAND`: `uav_delivery.lcmt_quadrotor_command`
+- `UAV_QUADROTOR_SETPOINT`: `uav_delivery.lcmt_quadrotor_setpoint`
 - `UAV_SIM_TIME`: `uav_delivery.lcmt_sim_time`
 
 ### Moving target
@@ -175,6 +216,8 @@ Graphviz `dot` is unavailable, the code still writes a `.dot` file.
   state.
 - With no controller running, the quadrotor receives zero propeller input and
   should fall from its initial state.
+- With no setpoint publisher running, the controller still starts, but it will
+  not receive commanded motion updates on `UAV_QUADROTOR_SETPOINT`.
 - `quadrotor_visualizer` is the only visualizer entrypoint. Toggle onboard
   rendering with `--camera_render`.
 
