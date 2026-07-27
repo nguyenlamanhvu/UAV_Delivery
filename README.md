@@ -125,6 +125,8 @@ env -u LD_LIBRARY_PATH bazel run //:quadrotor_visualizer -- \
 
 This starts a Meshcat server and prints the URL on startup. Without
 `--camera_render`, the default Meshcat port is `7000`.
+By default it also loads the static campus background from `models/campus.sdf`.
+Disable that with `--nobackground`.
 
 ### Terminal 4 alternative: shared visualizer with onboard camera rendering
 

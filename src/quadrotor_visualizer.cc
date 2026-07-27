@@ -64,6 +64,8 @@ DEFINE_string(camera_config, "config/quadrotor_target_camera_visualizer.yaml",
               "YAML file containing QuadrotorTargetCameraVisualizerParams.");
 DEFINE_bool(camera_render, false,
             "Enable the onboard drone camera rendering and RArUco pipeline.");
+DEFINE_bool(background, true,
+            "Load the static campus background SDF into the visualizer scene.");
 DEFINE_string(lcm_url,
               "udpm://239.255.76.67:7667?ttl=0",
               "LCM URL for this instance");
@@ -232,6 +234,9 @@ int DoMain(int argc, char* argv[]) {
 
   drake::multibody::Parser parser(&plant, scene_graph);
   parser.package_map().Add("uav_models", "UAV_models");
+  if (FLAGS_background) {
+    parser.AddModels("models/campus.sdf");
+  }
   const auto quadrotor_instances = parser.AddModels(quadrotor_params.model);
   const auto moving_target_instances = parser.AddModels(moving_target_params.model);
   if (quadrotor_instances.size() != 1 || moving_target_instances.size() != 1) {
@@ -383,6 +388,8 @@ int DoMain(int argc, char* argv[]) {
   std::cout << "  moving target config: " << FLAGS_moving_target_config
             << std::endl;
   std::cout << "  camera_render: " << (FLAGS_camera_render ? "true" : "false")
+            << std::endl;
+  std::cout << "  background: " << (FLAGS_background ? "true" : "false")
             << std::endl;
   if (camera_visualizer_params.has_value()) {
     std::cout << "  camera config: " << FLAGS_camera_config << std::endl;

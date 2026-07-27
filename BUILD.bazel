@@ -3,6 +3,11 @@ load("@rules_cc//cc:defs.bzl", "cc_library")
 
 package(default_visibility = ["//visibility:public"])
 
+filegroup(
+    name = "models_files",
+    srcs = glob(["models/**"]),
+)
+
 cc_library(
     name = "quadrotor_params",
     srcs = ["params/quadrotor_params.cc"],
@@ -199,6 +204,7 @@ cc_binary(
         "config/quadrotor_sim.yaml",
         "config/moving_target.yaml",
         "config/quadrotor_target_camera_visualizer.yaml",
+        ":models_files",
         "//UAV_models:uav_files",
     ],
         copts = [
