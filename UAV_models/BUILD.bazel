@@ -5,6 +5,7 @@ filegroup(
     srcs = [
         ":skydio_2",
         ":moving_target",
+        ":env",
     ],
 )
 
@@ -19,5 +20,12 @@ filegroup(
     name = "moving_target",
     srcs = glob([
         "moving_target/**",
+    ]),
+)
+
+filegroup(
+    name = "env",
+    srcs = glob([
+        "env/**",
     ]),
 )

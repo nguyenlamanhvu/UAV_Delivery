@@ -243,20 +243,26 @@ Eigen::Vector4d Se3Controller::AllocateRotorInputs(
   // 2. Compute base thrust
   double base_u = thrust / (4.0 * params_.plant.thrust_coeff);
   
-  // 3. Prioritize attitude! Shift base_u so that base_u + diff_u fits in [0, max_rotor_input]
-  // We must ensure: base_u + max_diff_u <= max_rotor_input  =>  base_u <= max_rotor_input - max_diff_u
-  // We must ensure: base_u + min_diff_u >= 0                =>  base_u >= -min_diff_u
+  // 3. Prioritize thrust! Do NOT shift base_u upwards and shoot to the moon.
+  // Instead, if base_u + diff_u violates limits, scale diff_u down further.
   
-  double max_allowed_base_u = params_.plant.max_rotor_input - max_diff_u;
-  double min_allowed_base_u = -min_diff_u;
+  // First, clamp base_u to [0, max_rotor_input]
+  base_u = std::max(0.0, std::min(base_u, params_.plant.max_rotor_input));
   
-  // Clamp base_u to respect the attitude margins
-  if (base_u > max_allowed_base_u) {
-    base_u = max_allowed_base_u;
-    *saturated = true;
+  // Now find the most restrictive bound on diff_u
+  double max_allowed_diff_u = params_.plant.max_rotor_input - base_u;
+  double min_allowed_diff_u = -base_u; // Since diff_u is added to base_u
+  
+  double scale = 1.0;
+  if (max_diff_u > max_allowed_diff_u && max_diff_u > 0) {
+    scale = std::min(scale, max_allowed_diff_u / max_diff_u);
   }
-  if (base_u < min_allowed_base_u) {
-    base_u = min_allowed_base_u;
+  if (min_diff_u < min_allowed_diff_u && min_diff_u < 0) {
+    scale = std::min(scale, min_allowed_diff_u / min_diff_u);
+  }
+  
+  diff_u *= scale;
+  if (scale < 1.0) {
     *saturated = true;
   }
   

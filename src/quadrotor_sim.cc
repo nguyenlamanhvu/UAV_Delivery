@@ -38,6 +38,8 @@
 #include "uav_delivery/lcmt_quadrotor_command.hpp"
 #include "uav_delivery/lcmt_quadrotor_state.hpp"
 #include "uav_delivery/lcmt_sim_time.hpp"
+#include "uav_delivery/lcmt_wind_parameters.hpp"
+#include "systems/dryden_wind_force_system.h"
 
 DEFINE_string(config, "config/quadrotor_sim.yaml",
               "YAML file containing QuadrotorSimParams.");
@@ -55,6 +57,24 @@ DEFINE_bool(run_forever, false,
 
 namespace uav_delivery {
 namespace {
+
+class SpatialForceMultiplexer : public drake::systems::LeafSystem<double> {
+ public:
+  SpatialForceMultiplexer() {
+    this->DeclareAbstractInputPort("force1", drake::Value<std::vector<drake::multibody::ExternallyAppliedSpatialForce<double>>>());
+    this->DeclareAbstractInputPort("force2", drake::Value<std::vector<drake::multibody::ExternallyAppliedSpatialForce<double>>>());
+    this->DeclareAbstractOutputPort("combined", &SpatialForceMultiplexer::CalcCombined);
+  }
+ private:
+  void CalcCombined(const drake::systems::Context<double>& context,
+                    std::vector<drake::multibody::ExternallyAppliedSpatialForce<double>>* out) const {
+    out->clear();
+    const auto& f1 = this->get_input_port(0).Eval<std::vector<drake::multibody::ExternallyAppliedSpatialForce<double>>>(context);
+    const auto& f2 = this->get_input_port(1).Eval<std::vector<drake::multibody::ExternallyAppliedSpatialForce<double>>>(context);
+    out->insert(out->end(), f1.begin(), f1.end());
+    out->insert(out->end(), f2.begin(), f2.end());
+  }
+};
 
 class MultibodyQuadrotorState final : public drake::systems::LeafSystem<double> {
  public:
@@ -149,8 +169,17 @@ int DoMain(int argc, char* argv[]) {
                   propellers->get_command_input_port());
   builder.Connect(plant->get_body_poses_output_port(),
                   propellers->get_body_poses_input_port());
-  builder.Connect(propellers->get_spatial_forces_output_port(),
-                  plant->get_applied_spatial_force_input_port());
+
+  auto* wind_sub = builder.AddSystem(
+      drake::systems::lcm::LcmSubscriberSystem::Make<lcmt_wind_parameters>(
+          "WIND_PARAMETERS", lcm));
+  auto* wind_force = builder.AddSystem<systems::DrydenWindForceSystem>(*plant, "base_link");
+  builder.Connect(wind_sub->get_output_port(), wind_force->get_wind_parameters_input_port());
+
+  auto* force_mux = builder.AddSystem<SpatialForceMultiplexer>();
+  builder.Connect(propellers->get_spatial_forces_output_port(), force_mux->get_input_port(0));
+  builder.Connect(wind_force->get_spatial_forces_output_port(), force_mux->get_input_port(1));
+  builder.Connect(force_mux->get_output_port(0), plant->get_applied_spatial_force_input_port());
 
   auto* moving_target_teleop_sub = builder.AddSystem(
       drake::systems::lcm::LcmSubscriberSystem::Make<

@@ -143,8 +143,9 @@ int DoMain(int argc, char* argv[]) {
     lcm.Publish(params.lcm_channels.teleop_command, bytes.data(), encoded_size,
                 std::nullopt);
 
-    std::cout << "\rteleop throttle=" << throttle << " turn=" << turn
-              << " stop=" << (stop ? "true " : "false") << std::flush;
+    // std::cout << "\rteleop throttle=" << throttle << " turn=" << turn
+    //           << " stop=" << (stop ? "true" : "false") << std::flush;
+    // Removed to prevent console spam.
 
     ApplyDecay(params.teleop.decay_rate, publish_period, &throttle);
     ApplyDecay(params.teleop.decay_rate, publish_period, &turn);

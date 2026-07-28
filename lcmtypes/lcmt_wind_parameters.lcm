@@ -1,0 +1,9 @@
+package uav_delivery;
+
+struct lcmt_wind_parameters
+{
+    double nominal_wind[3];
+    double gust_sigma[3];
+    double altitude;
+    double drag_coeff;
+}

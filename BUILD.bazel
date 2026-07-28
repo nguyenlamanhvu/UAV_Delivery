@@ -1,5 +1,5 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary")
-load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -144,6 +144,7 @@ cc_binary(
     ],
     deps = [
         ":diagram_utils",
+        ":dryden_wind_force_system",
         ":moving_target_controller_lib",
         ":moving_target_lcm_systems",
         ":moving_target_params",
@@ -284,5 +285,31 @@ cc_library(
         "-Wp,-I/usr/include/glib-2.0",
         "-Wp,-I/usr/lib/x86_64-linux-gnu/glib-2.0/include",
         "-Wp,-I/usr/include/x86_64-linux-gnu",
+    ],
+)
+
+cc_library(
+    name = "dryden_wind_force_system",
+    srcs = ["systems/dryden_wind_force_system.cc"],
+    hdrs = [
+        "systems/dryden_wind_force_system.h",
+        "systems/wind-dynamics/dryden_model.h",
+    ],
+    deps = [
+        "//lcmtypes:uav_lcmtypes",
+        "@drake//math",
+        "@drake//multibody/plant",
+        "@drake//systems/framework",
+        "@eigen",
+    ],
+)
+
+cc_test(
+    name = "dryden_wind_force_system_test",
+    size = "small",
+    srcs = ["systems/dryden_wind_force_system_test.cc"],
+    deps = [
+        ":dryden_wind_force_system",
+        "@com_google_googletest//:gtest_main",
     ],
 )

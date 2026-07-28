@@ -54,6 +54,7 @@
 #include "uav_delivery/lcmt_moving_target_state.hpp"
 #include "uav_delivery/lcmt_quadrotor_state.hpp"
 #include "uav_delivery/lcmt_raruco_detection.hpp"
+#include "uav_delivery/lcmt_camera_command.hpp"
 
 DEFINE_string(config, "config/quadrotor_sim.yaml",
               "YAML file containing QuadrotorSimParams.");
@@ -92,7 +93,6 @@ class CombinedSceneStateToPosition final
         moving_target_body_(plant.GetBodyByName("base_link", moving_target_instance)),
         camera_pitch_joint_(plant.GetJointByName<drake::multibody::RevoluteJoint>(
             "camera_pitch_joint", quadrotor_instance)),
-        camera_pitch_rad_(camera_pitch_rad),
         front_left_(plant.GetJointByName<drake::multibody::RevoluteJoint>(
             "front_left_wheel_joint", moving_target_instance)),
         front_right_(plant.GetJointByName<drake::multibody::RevoluteJoint>(
@@ -111,6 +111,8 @@ class CombinedSceneStateToPosition final
                                     drake::systems::BasicVector<double>(
                                         systems::MovingTargetPlant::kStateSize))
                                     .get_index();
+    camera_command_port_ = this->DeclareAbstractInputPort(
+        "camera_command", drake::Value<lcmt_camera_command>()).get_index();
     this->DeclareVectorOutputPort(
         "q", drake::systems::BasicVector<double>(plant.num_positions()),
         &CombinedSceneStateToPosition::CalcPositions);
@@ -129,7 +131,13 @@ class CombinedSceneStateToPosition final
     const drake::math::RigidTransform<double> X_WQ(
         drake::math::RotationMatrix<double>(R_WQ), quadrotor_state.segment<3>(0));
     plant_.SetFreeBodyPose(plant_context_.get(), quadrotor_body_, X_WQ);
-    camera_pitch_joint_.set_angle(plant_context_.get(), camera_pitch_rad_);
+    
+    double pitch = 0.0;
+    const auto& cam_port = this->get_input_port(camera_command_port_);
+    if (cam_port.HasValue(context)) {
+        pitch = cam_port.Eval<lcmt_camera_command>(context).pitch_rad;
+    }
+    camera_pitch_joint_.set_angle(plant_context_.get(), pitch);
 
     const drake::math::RigidTransform<double> X_WT(
         drake::math::RollPitchYaw<double>(0.0, 0.0, moving_target_state(2)),
@@ -147,7 +155,6 @@ class CombinedSceneStateToPosition final
   const drake::multibody::RigidBody<double>& quadrotor_body_;
   const drake::multibody::RigidBody<double>& moving_target_body_;
   const drake::multibody::RevoluteJoint<double>& camera_pitch_joint_;
-  const double camera_pitch_rad_;
   const drake::multibody::RevoluteJoint<double>& front_left_;
   const drake::multibody::RevoluteJoint<double>& front_right_;
   const drake::multibody::RevoluteJoint<double>& rear_left_;
@@ -155,6 +162,7 @@ class CombinedSceneStateToPosition final
   mutable std::unique_ptr<drake::systems::Context<double>> plant_context_;
   drake::systems::InputPortIndex quadrotor_state_port_;
   drake::systems::InputPortIndex moving_target_state_port_;
+  drake::systems::InputPortIndex camera_command_port_;
 };
 
 template <EngineType engine_type>
@@ -259,6 +267,9 @@ int DoMain(int argc, char* argv[]) {
           moving_target_params.lcm_channels.state, lcm));
   auto* moving_target_state_receiver =
       builder.AddSystem<systems::MovingTargetStateReceiver>();
+  auto* camera_command_sub = builder.AddSystem(
+      drake::systems::lcm::LcmSubscriberSystem::Make<lcmt_camera_command>(
+          "CAMERA_COMMAND", lcm));
   auto* state_to_q = builder.AddSystem<CombinedSceneStateToPosition>(
       plant, quadrotor_instance, moving_target_instance,
       camera_visualizer_params.has_value()
@@ -275,6 +286,8 @@ int DoMain(int argc, char* argv[]) {
                   moving_target_state_receiver->get_input_port(0));
   builder.Connect(moving_target_state_receiver->get_output_port(0),
                   state_to_q->get_input_port(1));
+  builder.Connect(camera_command_sub->get_output_port(),
+                  state_to_q->get_input_port(2));
   builder.Connect(state_to_q->get_output_port(0), to_pose->get_input_port());
   builder.Connect(to_pose->get_output_port(),
                   scene_graph->get_source_pose_port(plant.get_source_id().value()));

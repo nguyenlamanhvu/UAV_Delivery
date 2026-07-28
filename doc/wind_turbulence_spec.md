@@ -23,17 +23,24 @@ The implementation must adhere to the continuous Dryden velocity spectra as defi
 *   **Parameters:** 
     *   Scale lengths ($L_u, L_v, L_w$), which are a function of altitude. For low-altitude drone flight (boundary layer), $L_w \approx h$.
     *   Turbulence intensities ($\sigma_u, \sigma_v, \sigma_w$), which dictate the severity of the storm/gusts.
-*   **Transfer Functions:** The white noise must be passed through the specific $H_u(s)$, $H_v(s)$, and $H_w(s)$ transfer functions (or their discrete state-space equivalents via Tustin transform) to generate the turbulent velocity components $u_g, v_g, w_g$.
+*   **Transfer Functions:** The white noise must be passed through the specific $H_u(s)$, $H_v(s)$, and $H_w(s)$ transfer functions (or their discrete state-space equivalents via Tustin transform) to generate the turbulent velocity components $u_g, v_g, w_g$. The continuous-time transfer functions $H(s)$ are:
+    *   **Longitudinal ($u_g$):** $H_u(s) = \sigma_u \sqrt{\frac{2 L_u}{\pi V}} \frac{1}{1 + \frac{L_u}{V}s}$
+    *   **Lateral ($v_g$):** $H_v(s) = \sigma_v \sqrt{\frac{L_v}{\pi V}} \frac{1 + \sqrt{3}\frac{L_v}{V}s}{(1 + \frac{L_v}{V}s)^2}$
+    *   **Vertical ($w_g$):** $H_w(s) = \sigma_w \sqrt{\frac{L_w}{\pi V}} \frac{1 + \sqrt{3}\frac{L_w}{V}s}{(1 + \frac{L_w}{V}s)^2}$
 
 ## 4. Implementation Details for the Coding Agent
 *   **Language:** C++ (or Python bindings if prototyping).
 *   **Drake Classes Used:** `drake::systems::LeafSystem`, `drake::systems::RandomSource`, `drake::multibody::MultibodyPlant`.
-*   **State Space:** The `LeafSystem` will require internal continuous or discrete state to process the transfer functions over time.
+*   **State Space:** The `LeafSystem` will require internal continuous or discrete state to process the transfer functions over time. 
+
+### 4.1 Implementation Strategies based on External Repos
+*   **Fidelity-First (JSBSim Approach):** Replicate the `FGWinds` class (specifically the `ttTustin` model from `src/models/atmosphere/FGWinds.cpp`), which discretizes the Dryden transfer functions using the Tustin transform. This provides deep MIL-spec fidelity where turbulence scales continuously with drone velocity and altitude.
+*   **Modular MAV Approach (goromal Approach):** For a standalone environmental wind process that computes independently of the drone's instantaneous state (useful for multi-agent MAV sims), replicate the `dryden_model::DrydenWind` class (from `include/wind-dynamics/dryden_model.h`). This assumes a constant effective airspeed (e.g., $V = 1.0 \text{ m/s}$) to decouple the wind model from dynamic states.
 
 ## 5. References and Resources
 The coding agent should refer to the following resources for exact mathematical formulations and C++ implementation examples:
 
 1.  **Mathematical Foundation:** [MIL-F-8785C (Military Specification - Flying Qualities of Piloted Airplanes)](http://everyspec.com/MIL-SPECS/MIL-SPECS-MIL-F/MIL-F-8785C_12231/)
-2.  **C++ Implementation Reference:** [goromal/wind-dynamics on GitHub](https://github.com/goromal/wind-dynamics) - Provides a C++ class implementation of the Dryden model in pseudospectral form.
-3.  **Simulation Framework Reference:** [JSBSim Open Source Flight Dynamics Engine](https://github.com/JSBSim-Team/jsbsim) - See the `FGWinds` class for a highly validated C++ implementation of the Dryden model.
+2.  **C++ Implementation Reference:** [goromal/wind-dynamics on GitHub](https://github.com/goromal/wind-dynamics) - Provides a simpler, decoupled MAV-targeted C++ class implementation of the Dryden model.
+3.  **Simulation Framework Reference:** [JSBSim Open Source Flight Dynamics Engine](https://github.com/JSBSim-Team/jsbsim) - Highly validated C++ implementation of the Dryden model, specifically utilizing Tustin transforms for numerical stability.
 4.  **MathWorks Documentation:** [Dryden Wind Turbulence Model (Continuous)](https://www.mathworks.com/help/aeroblks/drydenwindturbulencemodelcontinuous.html) - Useful for verifying the transfer function equations.

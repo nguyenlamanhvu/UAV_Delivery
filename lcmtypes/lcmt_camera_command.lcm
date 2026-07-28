@@ -1,0 +1,5 @@
+package uav_delivery;
+
+struct lcmt_camera_command {
+    double pitch_rad;
+}
