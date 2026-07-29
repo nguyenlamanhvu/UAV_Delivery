@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include <Eigen/Dense>
 
@@ -47,6 +48,8 @@ struct QuadrotorInitialState {
 struct QuadrotorLcmChannels {
   std::string command{"UAV_QUADROTOR_COMMAND"};
   std::string state{"UAV_QUADROTOR_STATE"};
+  std::string reference{"UAV_QUADROTOR_REFERENCE"};
+  std::string reference_trajectory{"UAV_QUADROTOR_REFERENCE_TRAJECTORY"};
   std::string sim_time{"UAV_SIM_TIME"};
   std::string setpoint{"UAV_QUADROTOR_SETPOINT"};
 
@@ -54,6 +57,8 @@ struct QuadrotorLcmChannels {
   void Serialize(Archive* a) {
     a->Visit(DRAKE_NVP(command));
     a->Visit(DRAKE_NVP(state));
+    a->Visit(DRAKE_NVP(reference));
+    a->Visit(DRAKE_NVP(reference_trajectory));
     a->Visit(DRAKE_NVP(sim_time));
     a->Visit(DRAKE_NVP(setpoint));
   }
@@ -103,12 +108,45 @@ struct QuadrotorSe3ControllerParams {
   }
 };
 
+struct QuadrotorWaypoint {
+  double time{0.0};
+  Eigen::Vector3d position{0.0, 0.0, 1.0};
+  double yaw{0.0};
+
+  template <typename Archive>
+  void Serialize(Archive* a) {
+    a->Visit(DRAKE_NVP(time));
+    a->Visit(DRAKE_NVP(position));
+    a->Visit(DRAKE_NVP(yaw));
+  }
+};
+
+struct QuadrotorTrajectoryParams {
+  double publish_rate{10.0};
+  int preview_horizon{20};
+  double preview_dt{0.001};
+  std::vector<QuadrotorWaypoint> waypoints{
+      {0.0, Eigen::Vector3d{0.0, 0.0, 1.0}, 0.0},
+      {5.0, Eigen::Vector3d{1.0, 0.0, 1.0}, 0.0},
+      {10.0, Eigen::Vector3d{1.0, 1.0, 1.0}, 0.0},
+  };
+
+  template <typename Archive>
+  void Serialize(Archive* a) {
+    a->Visit(DRAKE_NVP(publish_rate));
+    a->Visit(DRAKE_NVP(preview_horizon));
+    a->Visit(DRAKE_NVP(preview_dt));
+    a->Visit(DRAKE_NVP(waypoints));
+  }
+};
+
 struct QuadrotorSimParams {
   std::string model{"UAV_models/skydio_2/quadrotor.urdf"};
   QuadrotorParams plant;
   QuadrotorInitialState initial_state;
   QuadrotorLcmChannels lcm_channels;
   QuadrotorSe3ControllerParams se3_controller;
+  QuadrotorTrajectoryParams trajectory;
   double publish_rate{100.0};
   double realtime_rate{1.0};
   double sim_time{10.0};
@@ -122,6 +160,7 @@ struct QuadrotorSimParams {
     a->Visit(DRAKE_NVP(initial_state));
     a->Visit(DRAKE_NVP(lcm_channels));
     a->Visit(DRAKE_NVP(se3_controller));
+    a->Visit(DRAKE_NVP(trajectory));
     a->Visit(DRAKE_NVP(publish_rate));
     a->Visit(DRAKE_NVP(realtime_rate));
     a->Visit(DRAKE_NVP(sim_time));

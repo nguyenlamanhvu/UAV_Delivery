@@ -1,0 +1,7 @@
+package uav_delivery;
+
+struct lcmt_timestamped_saved_traj
+{
+  int64_t utime;
+  lcmt_saved_traj saved_traj;
+}

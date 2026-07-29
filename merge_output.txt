@@ -1,0 +1,18 @@
+Auto-merging BUILD.bazel
+CONFLICT (content): Merge conflict in BUILD.bazel
+Auto-merging README.md
+CONFLICT (content): Merge conflict in README.md
+Auto-merging config/quadrotor_sim.yaml
+CONFLICT (content): Merge conflict in config/quadrotor_sim.yaml
+Auto-merging params/quadrotor_params.h
+Auto-merging src/quadrotor_se3_controller.cc
+CONFLICT (content): Merge conflict in src/quadrotor_se3_controller.cc
+Auto-merging src/quadrotor_sim.cc
+CONFLICT (content): Merge conflict in src/quadrotor_sim.cc
+Auto-merging src/quadrotor_visualizer.cc
+CONFLICT (content): Merge conflict in src/quadrotor_visualizer.cc
+Auto-merging systems/se3_controller.cc
+CONFLICT (content): Merge conflict in systems/se3_controller.cc
+Auto-merging systems/se3_controller.h
+CONFLICT (content): Merge conflict in systems/se3_controller.h
+Automatic merge failed; fix conflicts and then commit the result.
