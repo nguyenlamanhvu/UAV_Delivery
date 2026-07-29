@@ -1,100 +1,187 @@
 # UAV Delivery
 
-Drake/Bazel C++ quadrotor simulation with LCM-based process separation. The
-current setup follows the same broad pattern used in dairlib controller
-examples: one process publishes simulated robot state, another process subscribes
-to state and publishes commands, and a repo-local LCM spy knows the custom UAV
-message types.
-
-## Result
-The quadrotor follows predefined waypoints.
-
-https://github.com/user-attachments/assets/85d4a68f-ae4d-43df-85ed-58167a0db412
-
-
+Drake/Bazel C++ vehicle simulation workspace centered on a quadrotor world that
+now combines:
+- the newer master-branch Drake `MultibodyPlant` + `Propeller` quadrotor sim
+- a teleoperated moving-target ground vehicle
+- a unified visualizer that can optionally enable onboard camera rendering and
+  RArUco detection
 
 ## Layout
 
-- `src/quadrotor_sim.cc`: MultibodyPlant simulation process with Drake
-  `Propeller` systems.
-- `src/quadrotor_se3_controller.cc`: state-driven SE(3) pose controller process.
-- `src/quadrotor_waypoint_trajectory.cc`: state-driven waypoint reference
-  generator process.
-- `src/quadrotor_visualizer.cc`: Meshcat visualizer process for the URDF model,
-  configured waypoints, and trajectory preview.
-- `systems/se3_controller.*`: geometric SE(3) controller LeafSystem with LCM
-  message input/output ports.
-- `systems/reference_trajectory_unpacker.*`: trajectory preview unpacker used
-  inside the SE(3) controller diagram.
-- `systems/waypoint_trajectory_source.*`: timed waypoint interpolation into
-  SE(3) reference messages, driven by incoming UAV state.
-- `systems/lcm_driven_loop.h`: dairlib-style LCM-driven execution loop.
-- `systems/diagram_utils.*`: optional Graphviz SVG export for process diagrams.
-- `systems/lcm_systems.*`: LCM message receiver/sender systems.
-- `params/quadrotor_params.*`: YAML-serializable parameters.
-- `UAV_models/`: Skydio quadrotor URDF and mesh assets.
-- `config/quadrotor_sim.yaml`: default model, plant, controller, channel, and runtime
-  configuration.
-- `lcmtypes/*.lcm`: custom UAV LCM messages and repo-local `uav-lcm-spy`.
+### Core simulation path
+- `src/quadrotor_sim.cc`: main environment simulation. Uses Drake
+  `MultibodyPlant` + `Propeller` for the quadrotor and wires the moving-target
+  car into the same process.
+- `src/quadrotor_se3_controller.cc`: state-driven SE(3) controller process.
+- `src/quadrotor_visualizer.cc`: shared scene visualizer for the drone + moving
+  target. Supports optional camera rendering via `--camera_render`.
+- `systems/se3_controller.*`: geometric SE(3) controller LeafSystem.
+- `systems/lcm_systems.*`: quadrotor LCM receiver/sender systems.
+- `systems/diagram_utils.*`: Graphviz SVG export helpers and actor Meshcat path
+  helper.
+- `systems/sim_utils.*`: SIGINT/termination helpers.
+
+### Moving target path
+- `src/moving_target_teleop.cc`: terminal teleop publisher
+  (`MOVING_TARGET_TELEOP_CMD`).
+- `systems/moving_target_plant.*`: custom 9-state planar car plant.
+- `systems/moving_target_controller.*`: teleop + state to left/right torque
+  controller.
+- `systems/moving_target_lcm_systems.*`: moving-target LCM receiver/sender
+  systems.
+- `params/moving_target_params.*`: YAML-serializable moving-target parameters.
+- `config/moving_target.yaml`: moving-target runtime config.
+- `UAV_models/moving_target/`: moving-target URDF assets.
+
+### Camera / detection path
+- `params/quadrotor_camera_visualizer_params.h`: camera and detection params.
+- `config/quadrotor_target_camera_visualizer.yaml`: camera intrinsics,
+  renderer, output paths, and RArUco thresholds.
+- `systems/raruco_detector.*`: onboard camera verification and detection
+  publisher.
+- `systems/uav_image_system.*`: image writer + RTSP streaming bridge for the
+  onboard camera feed.
+- `UAV_models/moving_target/raruco_depth2_id0.png`: roof marker texture.
+
+### Helper scripts
+- `scripts/web_teleop/teleop_server.py`: publishes `UAV_QUADROTOR_SETPOINT`
+  from a simple HTTP teleop endpoint on port `8082`.
+- `scripts/simulate_joystick.py`: tiny HTTP client that repeatedly posts test
+  commands to the web teleop server.
+- `scripts/debug_lcm.py`: subscribes to `UAV_QUADROTOR_STATE` and
+  `UAV_QUADROTOR_SETPOINT` for quick inspection.
+
+### Shared assets and messages
+- `UAV_models/`: quadrotor, moving-target, and environment assets.
+- `lcmtypes/*.lcm`: quadrotor, moving-target, and camera detection message
+  types.
+- `config/quadrotor_sim.yaml`: quadrotor model, plant, controller, channels,
+  and runtime config.
 
 ## Build
 
 Regular build:
 
 ```bash
-bazel --batch build --jobs=12 //:quadrotor_sim //:quadrotor_waypoint_trajectory //:quadrotor_se3_controller //:quadrotor_visualizer //lcmtypes:uav-lcm-spy
-```
-
-Release build:
-
-```bash
-bazel --batch build --config=release --jobs=12 //:quadrotor_sim //:quadrotor_waypoint_trajectory //:quadrotor_se3_controller //:quadrotor_visualizer //lcmtypes:uav-lcm-spy
+bazel --batch build --jobs=12 \
+  //:quadrotor_sim \
+  //:quadrotor_se3_controller \
+  //:quadrotor_visualizer \
+  //:moving_target_teleop \
+  //lcmtypes:uav-lcm-spy
 ```
 
 The repo uses Drake v1.51.1 through Bzlmod in `MODULE.bazel`.
 
-## License
+If you have another Drake install in `LD_LIBRARY_PATH`, prefer running with:
 
-Copyright 2026 Nguyen Lam Anh Vu.
-
-Licensed under the Apache License, Version 2.0. See `LICENSE`.
+```bash
+env -u LD_LIBRARY_PATH bazel run //:quadrotor_sim
+```
 
 ## Run
 
-Terminal 1, start the plant simulation:
+### Terminal 1: start the simulation
 
 ```bash
-bazel run //:quadrotor_sim
+env -u LD_LIBRARY_PATH bazel run //:quadrotor_sim -- \
+  --config=config/quadrotor_sim.yaml \
+  --moving_target_config=config/moving_target.yaml
 ```
 
-Terminal 2, publish waypoint preview trajectories:
+Useful runtime flags:
 
 ```bash
-bazel run //:quadrotor_waypoint_trajectory
+--no_console_log
+--run_forever
+--diagram_svg=/tmp/quadrotor_sim.svg
 ```
 
-Terminal 3, start the SE(3) controller. This process also unpacks the latest
-preview trajectory internally:
+### Terminal 2: start the SE(3) controller
 
 ```bash
-bazel run //:quadrotor_se3_controller
+env -u LD_LIBRARY_PATH bazel run //:quadrotor_se3_controller -- \
+  --config=config/quadrotor_sim.yaml
 ```
 
-Inspect LCM:
+The controller subscribes to both `UAV_QUADROTOR_STATE` and
+`UAV_QUADROTOR_SETPOINT`. The repo currently includes Python helper scripts for
+publishing setpoints, not a dedicated Bazel-built setpoint publisher binary.
+
+### Terminal 3: optional LCM inspection
 
 ```bash
 bazel run //lcmtypes:uav-lcm-spy
 ```
 
-Optional terminal 4, visualize the URDF, configured waypoints, and latest
-trajectory preview in Meshcat:
+### Terminal 4: shared visualizer without camera rendering
 
 ```bash
-bazel run //:quadrotor_visualizer
+env -u LD_LIBRARY_PATH bazel run //:quadrotor_visualizer -- \
+  --config=config/quadrotor_sim.yaml \
+  --moving_target_config=config/moving_target.yaml
 ```
 
-Each binary writes a process diagram SVG on startup using the binary name, for
-example `quadrotor_sim.svg`. Override the output path when needed:
+This starts a Meshcat server and prints the URL on startup. Without
+`--camera_render`, the default Meshcat port is `7000`.
+By default it also loads the static campus background from `models/campus.sdf`.
+Disable that with `--nobackground`.
+
+### Terminal 4 alternative: shared visualizer with onboard camera rendering
+
+```bash
+env -u LD_LIBRARY_PATH bazel run //:quadrotor_visualizer -- \
+  --config=config/quadrotor_sim.yaml \
+  --moving_target_config=config/moving_target.yaml \
+  --camera_render \
+  --camera_config=config/quadrotor_target_camera_visualizer.yaml
+```
+
+Outputs in camera mode:
+- raw frames: `/tmp/uav_delivery/drone_front_camera/`
+- RArUco overlays: `/tmp/uav_delivery/drone_front_camera_raruco/`
+- detection LCM: `UAV_RARUCO_DETECTION`
+- RTSP stream: `rtsp://127.0.0.1:8554/Drake_camera_1`
+
+With `--camera_render`, Meshcat uses the port from
+`config/quadrotor_target_camera_visualizer.yaml` which is currently `7002`.
+
+### Terminal 5: moving target teleop
+
+```bash
+env -u LD_LIBRARY_PATH bazel run //:moving_target_teleop -- \
+  --config=config/moving_target.yaml
+```
+
+Teleop keys:
+- `W/S` or `Up/Down`: throttle
+- `A/D` or `Left/Right`: turn
+- `Space`: stop
+- `Q`: quit
+
+`moving_target_teleop` can start without a TTY, but keyboard control only works
+from an interactive terminal.
+
+### Optional Terminal 6: quadrotor web teleop helper
+
+```bash
+cd scripts/web_teleop
+python3 teleop_server.py
+```
+
+This serves `index.html` and publishes `UAV_QUADROTOR_SETPOINT` from HTTP
+commands on port `8082`.
+
+### Optional Terminal 7: debug quadrotor state and setpoint traffic
+
+```bash
+PYTHONPATH=scripts/web_teleop python3 scripts/debug_lcm.py
+```
+
+## Diagram SVG output
+
+Binaries can write a process diagram SVG on startup. Examples:
 
 ```bash
 bazel run //:quadrotor_sim -- --diagram_svg=/tmp/quadrotor_sim.svg
@@ -102,89 +189,42 @@ bazel run //:quadrotor_se3_controller -- --diagram_svg=/tmp/quadrotor_controller
 bazel run //:quadrotor_visualizer -- --diagram_svg=/tmp/quadrotor_visualizer.svg
 ```
 
-This uses Graphviz `dot`. If `dot` is not installed, the binary still writes a
-`.dot` file next to the SVG path. Passing a directory writes
-`<binary_name>.svg` inside that directory.
-
-Use the repo-local spy above so Java has the generated
-`uav_delivery.lcmt_*` classes on its classpath. A system `lcm-spy` may see the
-channels but mark them undecodable.
+Passing a directory writes `<binary_name>.svg` inside that directory. If
+Graphviz `dot` is unavailable, the code still writes a `.dot` file.
 
 ## LCM Channels
 
-Defined in `config/quadrotor_sim.yaml`:
-
+### Quadrotor
 - `UAV_QUADROTOR_STATE`: `uav_delivery.lcmt_quadrotor_state`
 - `UAV_QUADROTOR_COMMAND`: `uav_delivery.lcmt_quadrotor_command`
-- `UAV_QUADROTOR_REFERENCE`: `uav_delivery.lcmt_quadrotor_reference`
-- `UAV_QUADROTOR_REFERENCE_TRAJECTORY`: `uav_delivery.lcmt_timestamped_saved_traj`
+- `UAV_QUADROTOR_SETPOINT`: `uav_delivery.lcmt_quadrotor_setpoint`
 - `UAV_SIM_TIME`: `uav_delivery.lcmt_sim_time`
 
-The current process graph is:
+### Moving target
+- `MOVING_TARGET_TELEOP_CMD`: `uav_delivery.lcmt_moving_target_teleop_command`
+- `MOVING_TARGET_ACTUATION_CMD`: `uav_delivery.lcmt_moving_target_actuation_command`
+- `MOVING_TARGET_STATE`: `uav_delivery.lcmt_moving_target_state`
 
-```text
-quadrotor_sim -> UAV_QUADROTOR_STATE
-quadrotor_waypoint_trajectory listens to UAV_QUADROTOR_STATE -> UAV_QUADROTOR_REFERENCE_TRAJECTORY
-quadrotor_se3_controller listens to UAV_QUADROTOR_STATE + UAV_QUADROTOR_REFERENCE_TRAJECTORY
-quadrotor_se3_controller internally unpacks trajectory -> SE(3) reference -> UAV_QUADROTOR_COMMAND
-quadrotor_sim -> UAV_SIM_TIME
-quadrotor_visualizer subscribes UAV_QUADROTOR_STATE + UAV_QUADROTOR_REFERENCE_TRAJECTORY
-quadrotor_visualizer renders the URDF, YAML yaw-aligned waypoint XYZ markers, and live preview path in Meshcat
-```
-
-The SE(3) controller is driven by `UAV_QUADROTOR_STATE`: it waits for a new
-state message, updates the latest waypoint reference if one has arrived,
-advances to the message timestamp, and then force-publishes one
-`UAV_QUADROTOR_COMMAND`.
-
-## Configuration
-
-Most tuning lives in `config/quadrotor_sim.yaml`:
-
-- Model path: Skydio URDF used by the visualizer and shared process config.
-- Plant parameters: mass, gravity, arm length, thrust/yaw coefficients, inertia.
-- Initial state: position, initial RPY used to seed `R`, linear velocity, body angular velocity.
-- SE(3) controller gains: desired position/velocity/yaw and geometric PD gains.
-- Waypoint trajectory: timed position/yaw waypoints and reference publish rate.
-- Runtime settings: publish rate, realtime rate, sim time, console logging.
-
-`lcm_url` is intentionally a command-line flag, not YAML:
-
-```bash
-bazel run //:quadrotor_sim -- --lcm_url="udpm://239.255.76.67:7667?ttl=0"
-```
-
-The waypoint process is state-driven like the controller: it waits for
-`UAV_QUADROTOR_STATE`, advances its diagram time to the state timestamp, then
-updates an internal preview trajectory with a periodic unrestricted update event
-at `trajectory.publish_rate`. A periodic LCM publisher sends
-`UAV_QUADROTOR_REFERENCE_TRAJECTORY` at the same rate as a timestamped saved trajectory.
-The `quadrotor_se3_reference` block contains rows
-`x,y,z,vx,vy,vz,ax,ay,az,yaw` and `trajectory.preview_horizon` knots spaced by
-`trajectory.preview_dt`. The SE(3) controller process contains an internal
-reference unpacker that runs on every state tick, selects the first preview knot
-whose timestamp is not earlier than the current state timestamp, and feeds that
-single reference directly into the SE(3) controller LeafSystem. The controller
-itself does not sample or interpolate trajectories.
+### Camera / detection
+- `UAV_RARUCO_DETECTION`: `uav_delivery.lcmt_raruco_detection`
 
 ## Debug Notes
 
-With no controller running, the simulation receives zero propeller input and the
-UAV should fall from its initial `z = 1.0`. With the SE(3) controller running,
-the controller subscribes to state and publishes four propeller inputs to hold
-the target pose.
+- The quadrotor simulation uses Drake `MultibodyPlant` and `Propeller` for rotor
+  force application.
+- The moving target is part of the same simulated world and publishes its own
+  LCM state.
+- With no teleop running, the moving target should remain near its initial
+  state.
+- With no controller running, the quadrotor receives zero propeller input and
+  should fall from its initial state.
+- With no setpoint publisher running, the controller still starts, but it will
+  not receive commanded motion updates on `UAV_QUADROTOR_SETPOINT`.
+- `quadrotor_visualizer` is the only visualizer entrypoint. Toggle onboard
+  rendering with `--camera_render`.
 
-To make controller action obvious, edit the YAML, for example:
+## License
 
-```yaml
-initial_state:
-  position: [0.0, 0.0, 0.5]
-  rpy: [0.1, -0.1, 0.0]
-```
+Copyright 2026 Nguyen Lam Anh Vu.
 
-or:
-
-```yaml
-se3_controller:
-  desired_position: [0.0, 0.0, 1.5]
-```
+Licensed under the Apache License, Version 2.0. See `LICENSE`.

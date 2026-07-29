@@ -8,15 +8,15 @@
 #include "drake/common/yaml/yaml_io.h"
 #include "drake/systems/framework/diagram_builder.h"
 #include "drake/systems/lcm/lcm_publisher_system.h"
+#include "drake/systems/lcm/lcm_subscriber_system.h"
 #include "params/quadrotor_params.h"
 #include "systems/diagram_utils.h"
 #include "systems/lcm_driven_loop.h"
-#include "systems/reference_trajectory_unpacker.h"
 #include "systems/se3_controller.h"
 #include "systems/sim_utils.h"
 #include "uav_delivery/lcmt_quadrotor_command.hpp"
+#include "uav_delivery/lcmt_quadrotor_setpoint.hpp"
 #include "uav_delivery/lcmt_quadrotor_state.hpp"
-#include "uav_delivery/lcmt_timestamped_saved_traj.hpp"
 
 DEFINE_string(config, "config/quadrotor_sim.yaml",
               "YAML file containing QuadrotorSimParams.");
@@ -37,48 +37,32 @@ int DoMain(int argc, char* argv[]) {
   drake::lcm::DrakeLcm lcm(FLAGS_lcm_url);
 
   drake::systems::DiagramBuilder<double> builder;
-  auto* unpacker =
-      builder.AddSystem<systems::ReferenceTrajectoryUnpacker>(params);
   auto* controller = builder.AddSystem<systems::Se3Controller>(params);
+  auto* setpoint_sub = builder.AddSystem(
+      drake::systems::lcm::LcmSubscriberSystem::Make<lcmt_quadrotor_setpoint>(
+          params.lcm_channels.setpoint, &lcm));
   auto* command_pub = builder.AddSystem(
       drake::systems::lcm::LcmPublisherSystem::Make<lcmt_quadrotor_command>(
           params.lcm_channels.command, &lcm,
           {drake::systems::TriggerType::kForced}));
 
-  builder.Connect(unpacker->get_output_port(0), controller->get_input_port(1));
+  builder.Connect(setpoint_sub->get_output_port(), controller->get_input_port(1));
   builder.Connect(controller->get_output_port(0), command_pub->get_input_port());
   builder.AddSystem<systems::SimTerminator>();
 
   std::shared_ptr<drake::systems::Diagram<double>> diagram(builder.Build());
   systems::MaybeWriteDiagramSvg(*diagram, FLAGS_diagram_svg, argv[0]);
 
-  std::cout << "Quadrotor SE(3) controller config: " << FLAGS_config << "\n";
+  std::cout << "Quadrotor robust velocity controller config: " << FLAGS_config
+            << "\n";
   std::cout << "Subscribing state on " << params.lcm_channels.state << "\n";
-  std::cout << "Subscribing latest reference trajectory on "
-            << params.lcm_channels.reference_trajectory << "\n";
-  std::cout << "Unpacking reference internally for SE(3)\n";
+  std::cout << "Subscribing setpoint on " << params.lcm_channels.setpoint << "\n";
   std::cout << "Publishing command on " << params.lcm_channels.command << "\n";
 
-  systems::LatestMessagePortFixer<lcmt_timestamped_saved_traj> trajectory_fixer(
-      &lcm, params.lcm_channels.reference_trajectory, unpacker, 1,
-      unpacker->MakeDefaultTrajectory());
   systems::LcmDrivenLoop<lcmt_quadrotor_state> loop(
-      &lcm, diagram, unpacker, params.lcm_channels.state,
+      &lcm, diagram, controller, params.lcm_channels.state,
       true /* force publish once per input state */);
-  trajectory_fixer.FixInputPort(loop.get_diagram(),
-                                &loop.get_diagram_mutable_context());
-  loop.SimulateWithMessageCallback(
-      params.sim_time, []() { return systems::g_stop_requested; },
-      [&](const lcmt_quadrotor_state& state,
-          drake::systems::Diagram<double>* root,
-          drake::systems::Context<double>* root_context) {
-        while (lcm.HandleSubscriptions(0) > 0) {
-        }
-        trajectory_fixer.FixInputPort(root, root_context);
-        controller->get_input_port(0).FixValue(
-            &root->GetMutableSubsystemContext(*controller, root_context),
-            state);
-      });
+  loop.Simulate(params.sim_time, []() { return systems::g_stop_requested; });
   return 0;
 }
 

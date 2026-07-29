@@ -1,6 +1,8 @@
 build -c opt
 build --cxxopt=-std=c++20
 build --host_cxxopt=-std=c++20
+build --action_env=PATH=/usr/bin:/bin
+build --action_env=LD_LIBRARY_PATH=
 
 # Release build profile
 build:release -c opt

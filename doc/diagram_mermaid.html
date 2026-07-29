@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quadrotor Controller Diagram</title>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #f4f4f9; margin: 0; }
+        .container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Se3Controller Architecture</h2>
+        <pre class="mermaid">
+flowchart TD
+    %% Inputs
+    State[LCM: quadrotor_state<br>Position, Velocity, Rotation]
+    Setpoint[LCM: quadrotor_setpoint<br>Mode, Target Pos/Vel/Yaw]
+
+    %% Main Controller Block
+    subgraph Controller [Drake LeafSystem: Se3Controller]
+        
+        %% Continuous States
+        subgraph States [Continuous States / Integrators]
+            Integrator((Velocity<br>Integrator))
+            NDOB((Nonlinear<br>Disturbance<br>Observer))
+        end
+
+        %% Algebraic Core
+        subgraph Logic [Control Logic / CalcCommand]
+            Router{Mode Router<br>Pos / Vel / Direct}
+            Drag[Aerodynamic<br>Drag Feedforward]
+            ReqForce(Required Force Equation)
+            S2S1[S2 x S1 Decoupled<br>Yaw Controller]
+            Prioritizer[Hierarchical Mixer<br>1. Roll/Pitch 2. Thrust 3. Yaw]
+        end
+
+        %% Connections
+        State --> NDOB
+        State --> Integrator
+        State --> Router
+        State --> Drag
+
+        Setpoint --> Router
+        
+        Router -- "v_cmd" --> Integrator
+        Router -- "v_cmd" --> ReqForce
+        Integrator -- "I_v" --> ReqForce
+        NDOB -- "F_dist" --> ReqForce
+        Drag -- "F_drag" --> ReqForce
+        
+        ReqForce --> S2S1
+        S2S1 -- "Desired Torques & Thrust" --> Prioritizer
+        
+        %% Anti-windup feedback
+        Prioritizer -. "Anti-Windup Freeze" .-> Integrator
+    end
+
+    %% Outputs
+    Command[LCM: quadrotor_command<br>Rotor 1-4 Inputs]
+    Prioritizer --> Command
+        </pre>
+    </div>
+</body>
+</html>

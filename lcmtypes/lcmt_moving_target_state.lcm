@@ -1,0 +1,16 @@
+package uav_delivery;
+
+struct lcmt_moving_target_state {
+  int64_t utime;
+  int64_t timestamp_millis;
+  double x;
+  double y;
+  double yaw;
+  double vx;
+  double vy;
+  double yaw_rate;
+  double left_wheel_angle_front;
+  double left_wheel_angle_rear;
+  double right_wheel_angle_front;
+  double right_wheel_angle_rear;
+}

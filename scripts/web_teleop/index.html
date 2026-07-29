@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Drone Web Teleop</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.9.1/nipplejs.min.js"></script>
+    <style>
+        body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; background: #222; color: white; font-family: sans-serif; }
+        #meshcat { flex: 1; border: none; width: 100%; background: #000; }
+        #controls { height: 250px; display: flex; justify-content: space-between; align-items: center; padding: 0 10%; background: #1a1a1a; box-shadow: 0 -5px 15px rgba(0,0,0,0.5); position: relative;}
+        .joystick-zone { width: 180px; height: 180px; position: relative; background: rgba(255,255,255,0.05); border-radius: 50%; box-shadow: inset 0 0 20px rgba(0,0,0,0.5); }
+        .label { position: absolute; top: -30px; left: 50%; transform: translateX(-50%); font-size: 14px; font-weight: bold; color: #aaa; text-transform: uppercase; letter-spacing: 1px;}
+    </style>
+</head>
+<body>
+    <iframe id="meshcat" src="about:blank"></iframe>
+    <div id="controls">
+        <div style="position: relative;">
+            <div class="label">Throttle & Yaw</div>
+            <div id="left_joystick" class="joystick-zone"></div>
+        </div>
+        <div style="position: relative;">
+            <div class="label">Pitch & Roll</div>
+            <div id="right_joystick" class="joystick-zone"></div>
+        </div>
+    </div>
+    <script>
+        // Automatically point the iframe to the current machine's IP, but port 7000 (Meshcat)
+        document.getElementById('meshcat').src = 'http://' + window.location.hostname + ':7000';
+
+        const left_manager = nipplejs.create({ zone: document.getElementById('left_joystick'), mode: 'static', position: {left: '50%', top: '50%'}, color: '#4CAF50' });
+        const right_manager = nipplejs.create({ zone: document.getElementById('right_joystick'), mode: 'static', position: {left: '50%', top: '50%'}, color: '#2196F3' });
+
+        let state = { throttle: 0, yaw: 0, pitch: 0, roll: 0 };
+
+        left_manager.on('move', (evt, data) => { state.yaw = data.vector.x; state.throttle = data.vector.y; });
+        left_manager.on('end', () => { state.yaw = 0; state.throttle = 0; });
+        right_manager.on('move', (evt, data) => { state.roll = data.vector.x; state.pitch = data.vector.y; });
+        right_manager.on('end', () => { state.roll = 0; state.pitch = 0; });
+
+        // Send commands to python server at 20Hz
+        setInterval(() => {
+            fetch('/command', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(state)
+            }).catch(e => console.error('Connection error:', e));
+        }, 50); 
+    </script>
+</body>
+</html>

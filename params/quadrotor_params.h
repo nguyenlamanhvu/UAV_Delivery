@@ -51,6 +51,7 @@ struct QuadrotorLcmChannels {
   std::string reference{"UAV_QUADROTOR_REFERENCE"};
   std::string reference_trajectory{"UAV_QUADROTOR_REFERENCE_TRAJECTORY"};
   std::string sim_time{"UAV_SIM_TIME"};
+  std::string setpoint{"UAV_QUADROTOR_SETPOINT"};
 
   template <typename Archive>
   void Serialize(Archive* a) {
@@ -59,6 +60,7 @@ struct QuadrotorLcmChannels {
     a->Visit(DRAKE_NVP(reference));
     a->Visit(DRAKE_NVP(reference_trajectory));
     a->Visit(DRAKE_NVP(sim_time));
+    a->Visit(DRAKE_NVP(setpoint));
   }
 };
 
@@ -71,6 +73,18 @@ struct QuadrotorSe3ControllerParams {
   double kp_rotation{1.5};
   double kd_angular{0.3};
 
+  double max_velocity{3.0};
+  Eigen::Vector3d kv_velocity{3.0, 3.0, 4.0};
+  Eigen::Vector3d ki_velocity{0.2, 0.2, 0.3};
+  Eigen::Vector3d aerodynamic_drag{0.15, 0.15, 0.0};
+  Eigen::Vector3d k_rp{6.0, 6.0, 0.0};
+  double k_yaw{1.5};
+  Eigen::Vector3d k_omega{0.35, 0.35, 0.3};
+  double observer_gain{8.0};
+  double observer_force_gain{4.0};
+  double max_observer_force{8.0};
+  double max_integral_speed{6.0};
+
   template <typename Archive>
   void Serialize(Archive* a) {
     a->Visit(DRAKE_NVP(desired_position));
@@ -80,6 +94,17 @@ struct QuadrotorSe3ControllerParams {
     a->Visit(DRAKE_NVP(kd_position));
     a->Visit(DRAKE_NVP(kp_rotation));
     a->Visit(DRAKE_NVP(kd_angular));
+    a->Visit(DRAKE_NVP(max_velocity));
+    a->Visit(DRAKE_NVP(kv_velocity));
+    a->Visit(DRAKE_NVP(ki_velocity));
+    a->Visit(DRAKE_NVP(aerodynamic_drag));
+    a->Visit(DRAKE_NVP(k_rp));
+    a->Visit(DRAKE_NVP(k_yaw));
+    a->Visit(DRAKE_NVP(k_omega));
+    a->Visit(DRAKE_NVP(observer_gain));
+    a->Visit(DRAKE_NVP(observer_force_gain));
+    a->Visit(DRAKE_NVP(max_observer_force));
+    a->Visit(DRAKE_NVP(max_integral_speed));
   }
 };
 

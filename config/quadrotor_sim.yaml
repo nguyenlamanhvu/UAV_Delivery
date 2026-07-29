@@ -1,7 +1,7 @@
 model: UAV_models/skydio_2/quadrotor.urdf
 
 plant:
-  mass: 0.775
+  mass: 0.770
   gravity: 9.81
   arm_length: 0.15
   thrust_coeff: 1.0
@@ -18,9 +18,8 @@ initial_state:
 lcm_channels:
   command: UAV_QUADROTOR_COMMAND
   state: UAV_QUADROTOR_STATE
-  reference: UAV_QUADROTOR_REFERENCE
-  reference_trajectory: UAV_QUADROTOR_REFERENCE_TRAJECTORY
   sim_time: UAV_SIM_TIME
+  setpoint: UAV_QUADROTOR_SETPOINT
 
 se3_controller:
   desired_position: [0.0, 0.0, 1.0]
@@ -30,30 +29,20 @@ se3_controller:
   kd_position: 3.0
   kp_rotation: 1.5
   kd_angular: 0.3
+  max_velocity: 3.0
+  kv_velocity: [3.4, 3.4, 3.4]
+  ki_velocity: [0.0, 0.0, 2.0]
+  aerodynamic_drag: [0.15, 0.15, 0.0]
+  k_rp: [6.0, 6.0, 0.0]
+  k_yaw: 1.5
+  k_omega: [0.045, 0.075, 0.035]
+  observer_gain: 8.0
+  observer_force_gain: 4.0
+  max_observer_force: 8.0
+  max_integral_speed: 6.0
 
-trajectory:
-  publish_rate: 100.0
-  preview_horizon: 100
-  preview_dt: 0.004
-  waypoints:
-    - time: 0.0
-      position: [0.0, 0.0, 1.0]
-      yaw: 0.0
-    - time: 5.0
-      position: [1.0, 0.0, 2.0]
-      yaw: 0.0
-    - time: 10.0
-      position: [1.0, 1.0, 1.0]
-      yaw: 1.57
-    - time: 15.0
-      position: [-1.0, 1.0, 1.0]
-      yaw: 3.14
-    - time: 20.0
-      position: [-1.0, -1.0, 1.5]
-      yaw: -1.57
-
-publish_rate: 1000.0
+publish_rate: 100.0
 realtime_rate: 1.0
-sim_time: 25.0
+sim_time: 999999.0
 console_log: true
 console_period: 0.25

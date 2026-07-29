@@ -1,0 +1,8 @@
+package uav_delivery;
+
+struct lcmt_moving_target_actuation_command {
+  int64_t utime;
+  int64_t timestamp_millis;
+  double left_drive_torque;
+  double right_drive_torque;
+}
