@@ -18,6 +18,8 @@ initial_state:
 lcm_channels:
   command: UAV_QUADROTOR_COMMAND
   state: UAV_QUADROTOR_STATE
+  reference: UAV_QUADROTOR_REFERENCE
+  reference_trajectory: UAV_QUADROTOR_REFERENCE_TRAJECTORY
   sim_time: UAV_SIM_TIME
   setpoint: UAV_QUADROTOR_SETPOINT
 
@@ -40,6 +42,21 @@ se3_controller:
   observer_force_gain: 4.0
   max_observer_force: 8.0
   max_integral_speed: 6.0
+
+trajectory:
+  publish_rate: 10.0
+  preview_horizon: 20
+  preview_dt: 0.001
+  waypoints:
+    - time: 0.0
+      position: [0.0, 0.0, 1.0]
+      yaw: 0.0
+    - time: 5.0
+      position: [1.0, 0.0, 1.0]
+      yaw: 0.0
+    - time: 10.0
+      position: [1.0, 1.0, 1.0]
+      yaw: 0.0
 
 publish_rate: 100.0
 realtime_rate: 1.0

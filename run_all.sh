@@ -5,17 +5,28 @@ echo "==========================================================="
 echo "   Starting UAV Delivery Simulation Stack (Full System)    "
 echo "==========================================================="
 
-echo "Cleaning up stale ports (7000, 8554, 5000)..."
-fuser -k -9 7000/tcp 2>/dev/null
+echo "Cleaning up stale ports (7002, 8554, 5000)..."
+fuser -k -9 7002/tcp 2>/dev/null
 fuser -k -9 8554/tcp 2>/dev/null
 fuser -k -9 5000/tcp 2>/dev/null
+
+echo "Cleaning up stale UAV stack processes..."
+pkill -f 'bazel run //:quadrotor_visualizer' 2>/dev/null || true
+pkill -f 'bazel run //:quadrotor_se3_controller' 2>/dev/null || true
+pkill -f 'bazel run //:quadrotor_sim' 2>/dev/null || true
+pkill -f 'bazel run //:moving_target_teleop' 2>/dev/null || true
+pkill -f 'bazel-out/.*/quadrotor_visualizer' 2>/dev/null || true
+pkill -f 'bazel-out/.*/quadrotor_se3_controller' 2>/dev/null || true
+pkill -f 'bazel-out/.*/quadrotor_sim' 2>/dev/null || true
+pkill -f 'bazel-out/.*/moving_target_teleop' 2>/dev/null || true
+pkill -f 'scripts/wind_gui_server.py' 2>/dev/null || true
 sleep 1
 
 # Ensure bazel is ready
 bazel build //:quadrotor_sim //:quadrotor_visualizer //:quadrotor_se3_controller //:moving_target_teleop || exit 1
 
 # 1. Start the 3D Visualizer + Camera Rendering
-echo "[1/5] Starting Quadrotor Visualizer (Meshcat on 7000, Camera active)..."
+echo "[1/5] Starting Quadrotor Visualizer (Meshcat on 7002, Camera active)..."
 bazel run //:quadrotor_visualizer -- --camera_render=true &
 VIS_PID=$!
 sleep 2
@@ -42,7 +53,7 @@ sleep 2
 echo "[5/5] Starting Ultimate Command Center Web UI..."
 echo "-----------------------------------------------------------"
 echo "      Go to: http://localhost:5000 in your browser!        "
-echo "      (Or http://localhost:7000 for the Meshcat 3D view)   "
+echo "      (Or http://localhost:7002 for the Meshcat 3D view)   "
 echo "-----------------------------------------------------------"
 echo "Generating Python LCM Bindings..."
 lcm-gen -p lcmtypes/*.lcm
