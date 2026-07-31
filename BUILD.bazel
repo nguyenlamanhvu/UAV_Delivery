@@ -208,12 +208,7 @@ cc_binary(
         ":models_files",
         "//UAV_models:uav_files",
     ],
-        copts = [
-        "-Wp,-I/usr/include/gstreamer-1.0",
-        "-Wp,-I/usr/include/glib-2.0",
-        "-Wp,-I/usr/lib/x86_64-linux-gnu/glib-2.0/include",
-    ],
-deps = [
+    deps = [
         ":diagram_utils",
         ":uav_image_system",
         ":moving_target_lcm_systems",
@@ -251,20 +246,9 @@ cc_library(
     name = "gstreamer_rtsp_server",
     srcs = ["systems/gstreamer/rtsp_server.cc"],
     hdrs = ["systems/gstreamer/rtsp_server.h"],
-    copts = [
-        "-Wp,-I/usr/include/gstreamer-1.0",
-        "-Wp,-I/usr/include/glib-2.0",
-        "-Wp,-I/usr/lib/x86_64-linux-gnu/glib-2.0/include",
-        "-Wp,-I/usr/include/x86_64-linux-gnu",
-    ],
-    linkopts = [
-        "-lgstrtspserver-1.0",
-        "-lgstreamer-1.0",
-        "-lgobject-2.0",
-        "-lglib-2.0",
-        "-lgstrtp-1.0",
-        "-lgstapp-1.0",
-        "-pthread",
+    deps = [
+        "@gstreamer_rtp",
+        "@gstreamer_rtsp",
     ],
 )
 
@@ -279,12 +263,6 @@ cc_library(
         "@drake//systems/sensors:image",
         "@drake//systems/sensors:image_writer",
         "//lcmtypes:uav_lcmtypes",
-    ],
-    copts = [
-        "-Wp,-I/usr/include/gstreamer-1.0",
-        "-Wp,-I/usr/include/glib-2.0",
-        "-Wp,-I/usr/lib/x86_64-linux-gnu/glib-2.0/include",
-        "-Wp,-I/usr/include/x86_64-linux-gnu",
     ],
 )
 

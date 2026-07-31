@@ -7,6 +7,21 @@ bazel_dep(name = "lcm")
 bazel_dep(name = "drake")
 bazel_dep(name = "googletest", version = "1.14.0", repo_name = "com_google_googletest")
 
+system_pkg_config_repository = use_repo_rule(
+    "//tools/workspace:pkg_config_repository.bzl",
+    "system_pkg_config_repository",
+)
+
+system_pkg_config_repository(
+    name = "gstreamer_rtp",
+    modname = "gstreamer-rtp-1.0",
+)
+
+system_pkg_config_repository(
+    name = "gstreamer_rtsp",
+    modname = "gstreamer-rtsp-server-1.0",
+)
+
 git_override(
     module_name = "lcm",
     commit = "98f5403a8018d427c43482a4efe5760e6f54ea4e",
