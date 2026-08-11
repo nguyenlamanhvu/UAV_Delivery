@@ -66,7 +66,9 @@ DEFINE_string(camera_config, "config/quadrotor_target_camera_visualizer.yaml",
 DEFINE_bool(camera_render, false,
             "Enable the onboard drone camera rendering and RArUco pipeline.");
 DEFINE_bool(background, true,
-            "Load the static campus background SDF into the visualizer scene.");
+            "Load the static background SDF into the visualizer scene.");
+DEFINE_string(background_model, "models/topoexport_3D_modeling.sdf",
+              "SDF model file to load when --background is enabled.");
 DEFINE_string(lcm_url,
               "udpm://239.255.76.67:7667?ttl=0",
               "LCM URL for this instance");
@@ -243,7 +245,7 @@ int DoMain(int argc, char* argv[]) {
   drake::multibody::Parser parser(&plant, scene_graph);
   parser.package_map().Add("uav_models", "UAV_models");
   if (FLAGS_background) {
-    parser.AddModels("models/campus.sdf");
+    parser.AddModels(FLAGS_background_model);
   }
   const auto quadrotor_instances = parser.AddModels(quadrotor_params.model);
   const auto moving_target_instances = parser.AddModels(moving_target_params.model);

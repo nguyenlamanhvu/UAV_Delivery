@@ -125,8 +125,24 @@ env -u LD_LIBRARY_PATH bazel run //:quadrotor_visualizer -- \
 
 This starts a Meshcat server and prints the URL on startup. Without
 `--camera_render`, the default Meshcat port is `7000`.
-By default it also loads the static campus background from `models/campus.sdf`.
+By default it also loads the topoexport background from
+`models/topoexport_3D_modeling.sdf`.
 Disable that with `--nobackground`.
+You can switch to another background SDF with `--background_model=...`, for example
+`--background_model=models/campus.sdf`.
+
+### Terminal 4 alternative: shared visualizer with the campus background
+
+```bash
+env -u LD_LIBRARY_PATH bazel run //:quadrotor_visualizer -- \
+  --config=config/quadrotor_sim.yaml \
+  --moving_target_config=config/moving_target.yaml \
+  --background_model=models/campus.sdf
+```
+
+The new background SDF currently uses `models/topoexport_3D_modeling.obj` and
+recenters the topoexport model around the world origin so it is visible near the
+drone scene.
 
 ### Terminal 4 alternative: shared visualizer with onboard camera rendering
 
