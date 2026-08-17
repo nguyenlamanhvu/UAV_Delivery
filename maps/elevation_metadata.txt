@@ -1,7 +1,0 @@
-x_min: -180.0
-x_max: 40.0
-y_min: -30.0
-y_max: 140.0
-z_min: 94.0
-z_max: 155.79836719434138
-resolution: 0.1
