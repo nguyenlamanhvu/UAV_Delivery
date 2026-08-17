@@ -1,4 +1,5 @@
 model: UAV_models/skydio_2/quadrotor.urdf
+motor_type: racing_2207
 
 plant:
   mass: 0.770
@@ -33,7 +34,7 @@ se3_controller:
   kd_angular: 0.3
   max_velocity: 3.0
   kv_velocity: [3.4, 3.4, 3.4]
-  ki_velocity: [0.0, 0.0, 2.0]
+  ki_velocity: [0.0, 0.0, 0.0]
   aerodynamic_drag: [0.15, 0.15, 0.0]
   k_rp: [6.0, 6.0, 0.0]
   k_yaw: 1.5

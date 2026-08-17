@@ -24,8 +24,8 @@
         </div>
     </div>
     <script>
-        // Automatically point the iframe to the current machine's IP, but port 7000 (Meshcat)
-        document.getElementById('meshcat').src = 'http://' + window.location.hostname + ':7000';
+        // Automatically point the iframe to the current machine's IP, but port 9000 (Meshcat)
+        document.getElementById('meshcat').src = 'http://' + window.location.hostname + ':9000';
 
         const left_manager = nipplejs.create({ zone: document.getElementById('left_joystick'), mode: 'static', position: {left: '50%', top: '50%'}, color: '#4CAF50' });
         const right_manager = nipplejs.create({ zone: document.getElementById('right_joystick'), mode: 'static', position: {left: '50%', top: '50%'}, color: '#2196F3' });

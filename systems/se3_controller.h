@@ -32,6 +32,7 @@ class Se3Controller final : public drake::systems::LeafSystem<double> {
     Eigen::Vector4d rotor_input{Eigen::Vector4d::Zero()};
     double collective_thrust{0.0};
     bool saturated{false};
+    bool tilt_saturated{false};
   };
 
   void DoCalcTimeDerivatives(

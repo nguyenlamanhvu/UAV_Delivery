@@ -1,5 +1,5 @@
-#include <csignal>
 #include <cmath>
+#include <csignal>
 #include <iostream>
 #include <limits>
 #include <memory>
@@ -27,27 +27,28 @@
 #include "drake/systems/lcm/lcm_subscriber_system.h"
 #include "params/moving_target_params.h"
 #include "params/quadrotor_params.h"
+#include "systems/bldc_motor.h"
 #include "systems/diagram_utils.h"
+#include "systems/dryden_wind_force_system.h"
 #include "systems/lcm_systems.h"
 #include "systems/moving_target_controller.h"
 #include "systems/moving_target_lcm_systems.h"
 #include "systems/moving_target_plant.h"
 #include "systems/sim_utils.h"
+#include "systems/sysid_observer.h"
 #include "uav_delivery/lcmt_moving_target_state.hpp"
 #include "uav_delivery/lcmt_moving_target_teleop_command.hpp"
 #include "uav_delivery/lcmt_quadrotor_command.hpp"
 #include "uav_delivery/lcmt_quadrotor_state.hpp"
 #include "uav_delivery/lcmt_sim_time.hpp"
 #include "uav_delivery/lcmt_wind_parameters.hpp"
-#include "systems/dryden_wind_force_system.h"
 
 DEFINE_string(config, "config/quadrotor_sim.yaml",
               "YAML file containing QuadrotorSimParams.");
 DEFINE_string(moving_target_config, "config/moving_target.yaml",
               "YAML file containing MovingTargetSimParams for the car inside "
               "the quadrotor environment.");
-DEFINE_string(lcm_url,
-              "udpm://239.255.76.67:7667?ttl=0",
+DEFINE_string(lcm_url, "udpm://239.255.76.67:7667?ttl=0",
               "LCM URL for this instance");
 DEFINE_string(diagram_svg, "", "Path or directory for the system diagram SVG.");
 DEFINE_bool(no_console_log, false,
@@ -59,38 +60,59 @@ namespace uav_delivery {
 namespace {
 
 class SpatialForceMultiplexer : public drake::systems::LeafSystem<double> {
- public:
+public:
   SpatialForceMultiplexer() {
-    this->DeclareAbstractInputPort("force1", drake::Value<std::vector<drake::multibody::ExternallyAppliedSpatialForce<double>>>());
-    this->DeclareAbstractInputPort("force2", drake::Value<std::vector<drake::multibody::ExternallyAppliedSpatialForce<double>>>());
-    this->DeclareAbstractOutputPort("combined", &SpatialForceMultiplexer::CalcCombined);
+    this->DeclareAbstractInputPort(
+        "force1",
+        drake::Value<std::vector<
+            drake::multibody::ExternallyAppliedSpatialForce<double>>>());
+    this->DeclareAbstractInputPort(
+        "force2",
+        drake::Value<std::vector<
+            drake::multibody::ExternallyAppliedSpatialForce<double>>>());
+    this->DeclareAbstractOutputPort("combined",
+                                    &SpatialForceMultiplexer::CalcCombined);
   }
- private:
-  void CalcCombined(const drake::systems::Context<double>& context,
-                    std::vector<drake::multibody::ExternallyAppliedSpatialForce<double>>* out) const {
+
+private:
+  void CalcCombined(
+      const drake::systems::Context<double> &context,
+      std::vector<drake::multibody::ExternallyAppliedSpatialForce<double>> *out)
+      const {
     out->clear();
-    const auto& f1 = this->get_input_port(0).Eval<std::vector<drake::multibody::ExternallyAppliedSpatialForce<double>>>(context);
-    const auto& f2 = this->get_input_port(1).Eval<std::vector<drake::multibody::ExternallyAppliedSpatialForce<double>>>(context);
+    const auto &f1 =
+        this->get_input_port(0)
+            .Eval<std::vector<
+                drake::multibody::ExternallyAppliedSpatialForce<double>>>(
+                context);
+    const auto &f2 =
+        this->get_input_port(1)
+            .Eval<std::vector<
+                drake::multibody::ExternallyAppliedSpatialForce<double>>>(
+                context);
     out->insert(out->end(), f1.begin(), f1.end());
     out->insert(out->end(), f2.begin(), f2.end());
   }
 };
 
-class MultibodyQuadrotorState final : public drake::systems::LeafSystem<double> {
- public:
-  explicit MultibodyQuadrotorState(int multibody_state_size,
-                                   int num_positions) : num_positions_(num_positions) {
-    state_port_ = this->DeclareVectorInputPort(
-        "multibody_state", drake::systems::BasicVector<double>(multibody_state_size))
-                      .get_index();
+class MultibodyQuadrotorState final
+    : public drake::systems::LeafSystem<double> {
+public:
+  explicit MultibodyQuadrotorState(int multibody_state_size, int num_positions)
+      : num_positions_(num_positions) {
+    state_port_ =
+        this->DeclareVectorInputPort(
+                "multibody_state",
+                drake::systems::BasicVector<double>(multibody_state_size))
+            .get_index();
     this->DeclareVectorOutputPort("quadrotor_state",
                                   drake::systems::BasicVector<double>(18),
                                   &MultibodyQuadrotorState::CalcState);
   }
 
- private:
-  void CalcState(const drake::systems::Context<double>& context,
-                 drake::systems::BasicVector<double>* output) const {
+private:
+  void CalcState(const drake::systems::Context<double> &context,
+                 drake::systems::BasicVector<double> *output) const {
     const Eigen::VectorXd x = this->get_input_port(state_port_).Eval(context);
     const Eigen::Quaterniond q(x(0), x(1), x(2), x(3));
     const Eigen::Matrix3d R = q.normalized().toRotationMatrix();
@@ -98,7 +120,11 @@ class MultibodyQuadrotorState final : public drake::systems::LeafSystem<double> 
 
     Eigen::VectorXd state = Eigen::VectorXd::Zero(18);
     state.segment<3>(0) = x.segment<3>(4);
-    state.segment<3>(3) = x.segment<3>(velocity_offset + 3);
+    
+    // Drake's quaternion floating base velocity is expressed in the body frame (v_WB_B)
+    // We must transform it to the world frame (v_WB_W) for the controller
+    const Eigen::Vector3d v_WB_B = x.segment<3>(velocity_offset + 3);
+    state.segment<3>(3) = R * v_WB_B;
     Eigen::Map<Eigen::Matrix<double, 3, 3, Eigen::RowMajor>>(state.data() + 6) =
         R;
     state.segment<3>(15) = x.segment<3>(velocity_offset);
@@ -109,36 +135,42 @@ class MultibodyQuadrotorState final : public drake::systems::LeafSystem<double> 
   int num_positions_{};
 };
 
-int DoMain(int argc, char* argv[]) {
+int DoMain(int argc, char *argv[]) {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   std::signal(SIGINT, systems::HandleSigint);
 
   QuadrotorSimParams params =
       drake::yaml::LoadYamlFile<QuadrotorSimParams>(FLAGS_config);
+
+  std::string motor_yaml = "config/motors/" + params.motor_type + ".yaml";
+  MotorParams motor_params = drake::yaml::LoadYamlFile<MotorParams>(motor_yaml);
+
   const MovingTargetSimParams moving_target_params =
-      drake::yaml::LoadYamlFile<MovingTargetSimParams>(FLAGS_moving_target_config);
+      drake::yaml::LoadYamlFile<MovingTargetSimParams>(
+          FLAGS_moving_target_config);
 
   drake::systems::DiagramBuilder<double> builder;
-  auto* lcm =
+  auto *lcm =
       builder.AddSystem<drake::systems::lcm::LcmInterfaceSystem>(FLAGS_lcm_url);
 
-  auto* plant = builder.AddSystem<drake::multibody::MultibodyPlant>(0.0);
+  auto *plant = builder.AddSystem<drake::multibody::MultibodyPlant>(0.0);
   drake::multibody::Parser parser(plant);
   parser.package_map().Add("uav_models", "UAV_models");
   const auto models = parser.AddModels(params.model);
   const auto model_instance = models.at(0);
   plant->Finalize();
-  const auto& base_link = plant->GetBodyByName("base_link", model_instance);
+  const auto &base_link = plant->GetBodyByName("base_link", model_instance);
 
-  auto* moving_target =
+  auto *moving_target =
       builder.AddSystem<systems::MovingTargetPlant>(moving_target_params.plant);
 
-  auto* command_sub = builder.AddSystem(
+  auto *command_sub = builder.AddSystem(
       drake::systems::lcm::LcmSubscriberSystem::Make<lcmt_quadrotor_command>(
           params.lcm_channels.command, lcm));
-  auto* command_receiver =
+  auto *command_receiver =
       builder.AddSystem<systems::QuadrotorCommandReceiver>();
-  builder.Connect(command_sub->get_output_port(), command_receiver->get_input_port(0));
+  builder.Connect(command_sub->get_output_port(),
+                  command_receiver->get_input_port(0));
 
   const double rotor_offset = params.plant.arm_length / std::sqrt(2.0);
   std::vector<drake::multibody::PropellerInfo> propeller_info{
@@ -163,32 +195,52 @@ int DoMain(int argc, char* argv[]) {
               Eigen::Vector3d(rotor_offset, -rotor_offset, 0.0)),
           params.plant.thrust_coeff, -params.plant.yaw_moment_coeff),
   };
-  auto* propellers =
+  auto *propellers =
       builder.AddSystem<drake::multibody::Propeller<double>>(propeller_info);
+
+  // Add first-order low-pass filter to simulate physical BLDC motor response
+  // time tau is loaded dynamically based on the motor type
+  auto *motor_lag = builder.AddSystem<systems::BldcMotor>(motor_params);
+
   builder.Connect(command_receiver->get_output_port(0),
+                  motor_lag->get_input_port(0));
+  builder.Connect(motor_lag->get_output_port(0),
                   propellers->get_command_input_port());
+
+  // Passive Online System Identification Module
+  auto *sysid_observer = builder.AddSystem<systems::SysIdObserver>(0.01);
+  builder.Connect(command_receiver->get_output_port(0),
+                  sysid_observer->get_input_port(0));
+  builder.Connect(motor_lag->get_output_port(0),
+                  sysid_observer->get_input_port(1));
   builder.Connect(plant->get_body_poses_output_port(),
                   propellers->get_body_poses_input_port());
 
-  auto* wind_sub = builder.AddSystem(
+  auto *wind_sub = builder.AddSystem(
       drake::systems::lcm::LcmSubscriberSystem::Make<lcmt_wind_parameters>(
           "WIND_PARAMETERS", lcm));
-  auto* wind_force = builder.AddSystem<systems::DrydenWindForceSystem>(*plant, "base_link");
-  builder.Connect(wind_sub->get_output_port(), wind_force->get_wind_parameters_input_port());
+  auto *wind_force =
+      builder.AddSystem<systems::DrydenWindForceSystem>(*plant, "base_link");
+  builder.Connect(wind_sub->get_output_port(),
+                  wind_force->get_wind_parameters_input_port());
 
-  auto* force_mux = builder.AddSystem<SpatialForceMultiplexer>();
-  builder.Connect(propellers->get_spatial_forces_output_port(), force_mux->get_input_port(0));
-  builder.Connect(wind_force->get_spatial_forces_output_port(), force_mux->get_input_port(1));
-  builder.Connect(force_mux->get_output_port(0), plant->get_applied_spatial_force_input_port());
+  auto *force_mux = builder.AddSystem<SpatialForceMultiplexer>();
+  builder.Connect(propellers->get_spatial_forces_output_port(),
+                  force_mux->get_input_port(0));
+  builder.Connect(wind_force->get_spatial_forces_output_port(),
+                  force_mux->get_input_port(1));
+  builder.Connect(force_mux->get_output_port(0),
+                  plant->get_applied_spatial_force_input_port());
 
-  auto* moving_target_teleop_sub = builder.AddSystem(
-      drake::systems::lcm::LcmSubscriberSystem::Make<
-          lcmt_moving_target_teleop_command>(
+  auto *moving_target_teleop_sub =
+      builder.AddSystem(drake::systems::lcm::LcmSubscriberSystem::Make<
+                        lcmt_moving_target_teleop_command>(
           moving_target_params.lcm_channels.teleop_command, lcm));
-  auto* moving_target_teleop_receiver =
+  auto *moving_target_teleop_receiver =
       builder.AddSystem<systems::MovingTargetTeleopReceiver>();
-  auto* moving_target_controller = builder.AddSystem<systems::MovingTargetController>(
-      moving_target_params.controller);
+  auto *moving_target_controller =
+      builder.AddSystem<systems::MovingTargetController>(
+          moving_target_params.controller);
   builder.Connect(moving_target_teleop_sub->get_output_port(),
                   moving_target_teleop_receiver->get_input_port(0));
   builder.Connect(moving_target_teleop_receiver->get_output_port(0),
@@ -198,41 +250,44 @@ int DoMain(int argc, char* argv[]) {
   builder.Connect(moving_target_controller->get_output_port(0),
                   moving_target->get_command_input_port());
 
-  auto* state_sender = builder.AddSystem<systems::QuadrotorStateSender>();
-  auto* state_converter = builder.AddSystem<MultibodyQuadrotorState>(
-      plant->num_multibody_states(model_instance), plant->num_positions(model_instance));
+  auto *state_sender = builder.AddSystem<systems::QuadrotorStateSender>();
+  auto *state_converter = builder.AddSystem<MultibodyQuadrotorState>(
+      plant->num_multibody_states(model_instance),
+      plant->num_positions(model_instance));
   builder.Connect(plant->get_state_output_port(model_instance),
                   state_converter->get_input_port(0));
   builder.Connect(state_converter->get_output_port(0),
                   state_sender->get_input_port(0));
-  auto* state_pub = builder.AddSystem(
+  auto *state_pub = builder.AddSystem(
       drake::systems::lcm::LcmPublisherSystem::Make<lcmt_quadrotor_state>(
           params.lcm_channels.state, lcm, 1.0 / params.publish_rate));
-  builder.Connect(state_sender->get_output_port(0), state_pub->get_input_port());
+  builder.Connect(state_sender->get_output_port(0),
+                  state_pub->get_input_port());
 
-  auto* moving_target_state_sender =
+  auto *moving_target_state_sender =
       builder.AddSystem<systems::MovingTargetStateSender>();
   builder.Connect(moving_target->get_output_port(0),
                   moving_target_state_sender->get_input_port(0));
-  auto* moving_target_state_pub = builder.AddSystem(
+  auto *moving_target_state_pub = builder.AddSystem(
       drake::systems::lcm::LcmPublisherSystem::Make<lcmt_moving_target_state>(
           moving_target_params.lcm_channels.state, lcm,
           1.0 / moving_target_params.publish_rate));
   builder.Connect(moving_target_state_sender->get_output_port(0),
                   moving_target_state_pub->get_input_port());
 
-  auto* sim_time_sender = builder.AddSystem<systems::SimTimeSender>();
-  auto* sim_time_pub = builder.AddSystem(
+  auto *sim_time_sender = builder.AddSystem<systems::SimTimeSender>();
+  auto *sim_time_pub = builder.AddSystem(
       drake::systems::lcm::LcmPublisherSystem::Make<lcmt_sim_time>(
           params.lcm_channels.sim_time, lcm, 1.0 / params.publish_rate));
-  builder.Connect(sim_time_sender->get_output_port(0), sim_time_pub->get_input_port());
+  builder.Connect(sim_time_sender->get_output_port(0),
+                  sim_time_pub->get_input_port());
 
   if (FLAGS_no_console_log) {
     params.console_log = false;
   }
 
   if (params.console_log) {
-    auto* console_logger =
+    auto *console_logger =
         builder.AddSystem<systems::ConsoleLogger>(18, params.console_period);
     builder.Connect(state_converter->get_output_port(0),
                     console_logger->get_input_port(0));
@@ -242,7 +297,7 @@ int DoMain(int argc, char* argv[]) {
   auto diagram = builder.Build();
   systems::MaybeWriteDiagramSvg(*diagram, FLAGS_diagram_svg, argv[0]);
   auto context = diagram->CreateDefaultContext();
-  auto& plant_context = plant->GetMyMutableContextFromRoot(context.get());
+  auto &plant_context = plant->GetMyMutableContextFromRoot(context.get());
   const drake::math::RigidTransform<double> X_WB(
       drake::math::RollPitchYaw<double>(params.initial_state.rpy),
       params.initial_state.position);
@@ -253,7 +308,7 @@ int DoMain(int argc, char* argv[]) {
           params.initial_state.body_angular_velocity,
           params.initial_state.velocity));
 
-  auto& moving_target_context =
+  auto &moving_target_context =
       diagram->GetMutableSubsystemContext(*moving_target, context.get());
   moving_target_context.SetContinuousState(
       MakeMovingTargetInitialStateVector(moving_target_params.initial_state));
@@ -261,6 +316,8 @@ int DoMain(int argc, char* argv[]) {
   std::cout << "Quadrotor sim config: " << FLAGS_config << "\n";
   std::cout << "Moving target config: " << FLAGS_moving_target_config << "\n";
   std::cout << "Quadrotor model: " << params.model << "\n";
+  std::cout << "Motor model: " << motor_params.name
+            << " (tau = " << motor_params.time_constant << "s)\n";
   std::cout << "Moving target model: " << moving_target_params.model << "\n";
   std::cout << "Using Drake MultibodyPlant + Propeller for rotor forces\n";
   std::cout << "Publishing state on " << params.lcm_channels.state
@@ -279,6 +336,8 @@ int DoMain(int argc, char* argv[]) {
   simulator.set_target_realtime_rate(
       std::max(params.realtime_rate, moving_target_params.realtime_rate));
   simulator.Initialize();
+  std::cout << "[Simulator] Initialization complete! Ready to fly."
+            << std::endl;
   if (FLAGS_run_forever) {
     simulator.AdvanceTo(std::numeric_limits<double>::infinity());
   } else {
@@ -287,9 +346,7 @@ int DoMain(int argc, char* argv[]) {
   return 0;
 }
 
-}  // namespace
-}  // namespace uav_delivery
+} // namespace
+} // namespace uav_delivery
 
-int main(int argc, char* argv[]) {
-  return uav_delivery::DoMain(argc, argv);
-}
+int main(int argc, char *argv[]) { return uav_delivery::DoMain(argc, argv); }

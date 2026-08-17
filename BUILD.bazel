@@ -134,6 +134,28 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "bldc_motor",
+    srcs = ["systems/bldc_motor.cc"],
+    hdrs = ["systems/bldc_motor.h"],
+    deps = [
+        ":quadrotor_params",
+        "@drake//systems/framework",
+    ],
+)
+
+cc_library(
+    name = "sysid_observer",
+    srcs = ["systems/sysid_observer.cc"],
+    hdrs = ["systems/sysid_observer.h"],
+    deps = [
+        ":quadrotor_params",
+        "@drake//systems/framework",
+        "//lcmtypes:uav_lcmtypes",
+        "//third_party/RLSFilter:RLSFilter",
+    ],
+)
+
 cc_binary(
     name = "quadrotor_sim",
     srcs = ["src/quadrotor_sim.cc"],
@@ -152,6 +174,8 @@ cc_binary(
         ":quadrotor_lcm_systems",
         ":quadrotor_params",
         ":quadrotor_sim_utils",
+        ":bldc_motor",
+        ":sysid_observer",
         "//lcmtypes:uav_lcmtypes",
         "@drake//common/yaml:yaml_io",
         "@drake//math",
@@ -162,6 +186,34 @@ cc_binary(
         "@drake//systems/framework",
         "@drake//systems/lcm",
         "@gflags//:gflags",
+    ],
+)
+
+cc_library(
+    name = "nmpc_controller",
+    srcs = ["systems/nmpc_controller.cc"],
+    hdrs = ["systems/nmpc_controller.h"],
+    deps = [
+        ":quadrotor_params",
+        "@drake//systems/framework",
+        "//lcmtypes:uav_lcmtypes",
+    ],
+)
+
+cc_binary(
+    name = "quadrotor_nmpc_controller",
+    srcs = ["src/quadrotor_nmpc_controller.cc"],
+    deps = [
+        ":diagram_utils",
+        ":lcm_driven_loop",
+        ":nmpc_controller",
+        ":quadrotor_params",
+        ":quadrotor_sim_utils",
+        "//lcmtypes:uav_lcmtypes",
+        "@drake//common/yaml:yaml_io",
+        "@drake//lcm",
+        "@drake//systems/lcm:lcm_pubsub_system",
+        "@gflags",
     ],
 )
 
@@ -247,6 +299,7 @@ cc_library(
     srcs = ["systems/gstreamer/rtsp_server.cc"],
     hdrs = ["systems/gstreamer/rtsp_server.h"],
     deps = [
+        "@gstreamer",
         "@gstreamer_rtp",
         "@gstreamer_rtsp",
     ],

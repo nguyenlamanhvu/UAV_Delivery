@@ -75,7 +75,7 @@ struct QuadrotorSe3ControllerParams {
 
   double max_velocity{3.0};
   Eigen::Vector3d kv_velocity{3.0, 3.0, 4.0};
-  Eigen::Vector3d ki_velocity{0.2, 0.2, 0.3};
+  Eigen::Vector3d ki_velocity{0.0, 0.0, 0.0};
   Eigen::Vector3d aerodynamic_drag{0.15, 0.15, 0.0};
   Eigen::Vector3d k_rp{6.0, 6.0, 0.0};
   double k_yaw{1.5};
@@ -140,8 +140,20 @@ struct QuadrotorTrajectoryParams {
   }
 };
 
+struct MotorParams {
+  std::string name{"Default Racing 2207"};
+  double time_constant{0.04};
+
+  template <typename Archive>
+  void Serialize(Archive* a) {
+    a->Visit(DRAKE_NVP(name));
+    a->Visit(DRAKE_NVP(time_constant));
+  }
+};
+
 struct QuadrotorSimParams {
   std::string model{"UAV_models/skydio_2/quadrotor.urdf"};
+  std::string motor_type{"racing_2207"};
   QuadrotorParams plant;
   QuadrotorInitialState initial_state;
   QuadrotorLcmChannels lcm_channels;
@@ -156,6 +168,7 @@ struct QuadrotorSimParams {
   template <typename Archive>
   void Serialize(Archive* a) {
     a->Visit(DRAKE_NVP(model));
+    a->Visit(DRAKE_NVP(motor_type));
     a->Visit(DRAKE_NVP(plant));
     a->Visit(DRAKE_NVP(initial_state));
     a->Visit(DRAKE_NVP(lcm_channels));

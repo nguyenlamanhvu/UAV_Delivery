@@ -59,6 +59,10 @@ now combines:
 - `config/quadrotor_sim.yaml`: quadrotor model, plant, controller, channels,
   and runtime config.
 
+## Documentation
+- [Tuning, Pre-Run & System Identification](docs/Tuning_and_PreRun.md)
+- [Full Control Architecture: SE(3), NMPC & Wind Model](docs/Architecture_SE3_NMPC_Wind.md)
+
 ## Build
 
 Regular build:
@@ -67,6 +71,7 @@ Regular build:
 bazel --batch build --jobs=12 \
   //:quadrotor_sim \
   //:quadrotor_se3_controller \
+  //:quadrotor_nmpc_controller \
   //:quadrotor_visualizer \
   //:moving_target_teleop \
   //lcmtypes:uav-lcm-spy
@@ -98,24 +103,31 @@ Useful runtime flags:
 --diagram_svg=/tmp/quadrotor_sim.svg
 ```
 
-### Terminal 2: start the SE(3) controller
+### Terminal 2: start the SE(3) Geometric controller
 
 ```bash
 env -u LD_LIBRARY_PATH bazel run //:quadrotor_se3_controller -- \
   --config=config/quadrotor_sim.yaml
 ```
 
-The controller subscribes to both `UAV_QUADROTOR_STATE` and
-`UAV_QUADROTOR_SETPOINT`. The repo currently includes Python helper scripts for
-publishing setpoints, not a dedicated Bazel-built setpoint publisher binary.
+The controller subscribes to `UAV_QUADROTOR_STATE` and `UAV_QUADROTOR_SETPOINT`.
 
-### Terminal 3: optional LCM inspection
+### Terminal 3: start the NMPC Planner
+
+```bash
+env -u LD_LIBRARY_PATH bazel run //:quadrotor_nmpc_controller -- \
+  --config=config/quadrotor_sim.yaml
+```
+
+The NMPC planner generates optimal local trajectories and pushes commands to the SE(3) controller.
+
+### Terminal 4: optional LCM inspection
 
 ```bash
 bazel run //lcmtypes:uav-lcm-spy
 ```
 
-### Terminal 4: shared visualizer without camera rendering
+### Terminal 5: shared visualizer without camera rendering
 
 ```bash
 env -u LD_LIBRARY_PATH bazel run //:quadrotor_visualizer -- \
@@ -144,7 +156,7 @@ The new background SDF currently uses `models/topoexport_3D_modeling.obj` and
 recenters the topoexport model around the world origin so it is visible near the
 drone scene.
 
-### Terminal 4 alternative: shared visualizer with onboard camera rendering
+### Terminal 5 alternative: shared visualizer with onboard camera rendering
 
 ```bash
 env -u LD_LIBRARY_PATH bazel run //:quadrotor_visualizer -- \
@@ -163,7 +175,7 @@ Outputs in camera mode:
 With `--camera_render`, Meshcat uses the port from
 `config/quadrotor_target_camera_visualizer.yaml` which is currently `7002`.
 
-### Terminal 5: moving target teleop
+### Terminal 6: moving target teleop
 
 ```bash
 env -u LD_LIBRARY_PATH bazel run //:moving_target_teleop -- \
@@ -179,7 +191,7 @@ Teleop keys:
 `moving_target_teleop` can start without a TTY, but keyboard control only works
 from an interactive terminal.
 
-### Optional Terminal 6: quadrotor web teleop helper
+### Optional Terminal 7: quadrotor web teleop helper
 
 ```bash
 cd scripts/web_teleop
@@ -189,7 +201,7 @@ python3 teleop_server.py
 This serves `index.html` and publishes `UAV_QUADROTOR_SETPOINT` from HTTP
 commands on port `8082`.
 
-### Optional Terminal 7: debug quadrotor state and setpoint traffic
+### Optional Terminal 8: debug quadrotor state and setpoint traffic
 
 ```bash
 PYTHONPATH=scripts/web_teleop python3 scripts/debug_lcm.py

@@ -19,7 +19,7 @@
         <geometry>
           <mesh>
             <uri>campus_model.obj</uri>
-            <scale>1000 1000 1000</scale>
+            <scale>104.999 31.047 78.500</scale>
           </mesh>
         </geometry>
         <surface>

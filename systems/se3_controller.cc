@@ -26,7 +26,7 @@ Se3Controller::Se3Controller(QuadrotorSimParams params)
   setpoint_port_ = this->DeclareAbstractInputPort(
       "quadrotor_setpoint", drake::Value<lcmt_quadrotor_setpoint>{})
                        .get_index();
-  this->DeclareContinuousState(6);
+  this->DeclareContinuousState(7);
   this->DeclareAbstractOutputPort("lcmt_quadrotor_command",
                                   &Se3Controller::CalcCommand);
 }
@@ -37,6 +37,8 @@ void Se3Controller::DoCalcTimeDerivatives(
   const Eigen::VectorXd z = context.get_continuous_state_vector().CopyToVector();
   const Eigen::Vector3d integral_velocity_error = z.segment<3>(0);
   const Eigen::Vector3d momentum_observer_state = z.segment<3>(3);
+  const double filtered_thrust = z(6);
+  
   const ControlSolution solution =
       SolveControl(context, integral_velocity_error, momentum_observer_state);
 
@@ -57,16 +59,48 @@ void Se3Controller::DoCalcTimeDerivatives(
       -params_.se3_controller.observer_gain *
           (momentum_observer_state - actual_momentum) +
       -params_.plant.mass * params_.plant.gravity * Eigen::Vector3d::UnitZ() +
-      body_z_W * solution.collective_thrust;
+      body_z_W * filtered_thrust;
 
   Eigen::Vector3d I_v_dot = Eigen::Vector3d::Zero();
-  if (!solution.saturated &&
-      velocity_W.norm() <= params_.se3_controller.max_integral_speed) {
-    I_v_dot = velocity_W - solution.desired_velocity;
+  if (!solution.saturated && !solution.tilt_saturated) {
+    // Max adaptive force limit (e.g., 50% of the drone's weight ~ 4.0N)
+    const double max_delta = 10.0; 
+    
+    Eigen::Vector3d position_W;
+    for (int i = 0; i < 3; ++i) {
+      position_W(i) = state.position[i];
+    }
+    const ResolvedSetpoint setpoint = ResolveSetpoint(context);
+    
+    // Instead of integrating the sliding variable `s` (which winds up when desired_velocity is clamped),
+    // we integrate the true position error.
+    Eigen::Vector3d position_error = position_W - setpoint.position;
+    
+    Eigen::Vector3d delta_dot = params_.se3_controller.ki_velocity.cwiseProduct(position_error);
+    Eigen::Vector3d current_delta = params_.se3_controller.ki_velocity.cwiseProduct(integral_velocity_error);
+    
+    // Projection operator: if adaptive force is at max bounds and pushing outward, project it tangent
+    if (current_delta.norm() >= max_delta && current_delta.dot(delta_dot) > 0) {
+      Eigen::Vector3d normal = current_delta.normalized();
+      delta_dot -= delta_dot.dot(normal) * normal;
+    }
+    
+    // Convert back to integrator state derivative (avoiding division by zero if ki is 0)
+    for (int i = 0; i < 3; ++i) {
+      if (params_.se3_controller.ki_velocity(i) > 1e-6) {
+        I_v_dot(i) = delta_dot(i) / params_.se3_controller.ki_velocity(i);
+      } else {
+        I_v_dot(i) = 0.0;
+      }
+    }
   }
 
-  Eigen::VectorXd zdot(6);
-  zdot << I_v_dot, p_hat_dot;
+  // Motor lag filter (tau = 0.04s)
+  double tau = 0.04;
+  double filtered_thrust_dot = (solution.collective_thrust - filtered_thrust) / tau;
+
+  Eigen::VectorXd zdot(7);
+  zdot << I_v_dot, p_hat_dot, filtered_thrust_dot;
   derivatives->SetFromVector(zdot);
 }
 
@@ -167,11 +201,13 @@ Se3Controller::ControlSolution Se3Controller::SolveControl(
     required_force_W.z() = 0.1;
   }
   
+  bool tilt_saturated = false;
   // Enforce maximum tilt angle of ~40 degrees (tan(40) = 0.839)
   const double max_tilt_tan = 0.839;
   double f_xy_norm = required_force_W.head<2>().norm();
   if (f_xy_norm > max_tilt_tan * required_force_W.z()) {
     required_force_W.head<2>() *= (max_tilt_tan * required_force_W.z() / f_xy_norm);
+    tilt_saturated = true;
   }
   
   if (required_force_W.norm() < 1e-9) {
@@ -215,6 +251,7 @@ Se3Controller::ControlSolution Se3Controller::SolveControl(
   solution.rotor_input = rotor_input;
   solution.collective_thrust = collective_thrust;
   solution.saturated = saturated;
+  solution.tilt_saturated = tilt_saturated;
   return solution;
 }
 
@@ -224,49 +261,37 @@ Eigen::Vector4d Se3Controller::AllocateRotorInputs(
   // 1. Compute required differential thrusts for the moment
   Eigen::Vector4d diff_u = SolveMixer(0.0, moment_B);
   
-  // Check how much margin we need for the differential thrust
-  double max_diff_u = diff_u.maxCoeff();
-  double min_diff_u = diff_u.minCoeff(); // Usually negative
-  
   // If the commanded moment requires more differential thrust than the motors can physically
   // provide even if base_u was perfectly centered, we must scale down the moment.
+  double max_diff_u = diff_u.maxCoeff();
+  double min_diff_u = diff_u.minCoeff();
   double diff_span = max_diff_u - min_diff_u;
-  double alpha = 1.0;
+  
   if (diff_span > params_.plant.max_rotor_input) {
-    alpha = params_.plant.max_rotor_input / diff_span;
+    double alpha = params_.plant.max_rotor_input / diff_span;
     diff_u *= alpha;
-    *saturated = true;
     max_diff_u *= alpha;
     min_diff_u *= alpha;
+    *saturated = true;
   }
   
   // 2. Compute base thrust
   double base_u = thrust / (4.0 * params_.plant.thrust_coeff);
   
-  // 3. Prioritize thrust! Do NOT shift base_u upwards and shoot to the moon.
-  // Instead, if base_u + diff_u violates limits, scale diff_u down further.
+  // 3. Prioritize MOMENT! 
+  // For attitude stability, we must ensure diff_u is applied exactly.
+  // We need: 0 <= base_u + diff_u[i] <= max_rotor_input
+  // So base_u must be in: [-min_diff_u, max_rotor_input - max_diff_u]
+  double min_allowed_base = -min_diff_u;
+  double max_allowed_base = params_.plant.max_rotor_input - max_diff_u;
   
-  // First, clamp base_u to [0, max_rotor_input]
-  base_u = std::max(0.0, std::min(base_u, params_.plant.max_rotor_input));
-  
-  // Now find the most restrictive bound on diff_u
-  double max_allowed_diff_u = params_.plant.max_rotor_input - base_u;
-  double min_allowed_diff_u = -base_u; // Since diff_u is added to base_u
-  
-  double scale = 1.0;
-  if (max_diff_u > max_allowed_diff_u && max_diff_u > 0) {
-    scale = std::min(scale, max_allowed_diff_u / max_diff_u);
-  }
-  if (min_diff_u < min_allowed_diff_u && min_diff_u < 0) {
-    scale = std::min(scale, min_allowed_diff_u / min_diff_u);
-  }
-  
-  diff_u *= scale;
-  if (scale < 1.0) {
+  // If the requested base_u is outside this range, clamp it.
+  // This sacrifices altitude to maintain attitude, which is critical to avoid flipping or drifting.
+  if (base_u < min_allowed_base || base_u > max_allowed_base) {
     *saturated = true;
   }
+  base_u = std::clamp(base_u, min_allowed_base, max_allowed_base);
   
-  // 4. Combine
   Eigen::Vector4d rotor_input = Eigen::Vector4d::Constant(base_u) + diff_u;
   
   // Final safety clamp for floating point inaccuracies

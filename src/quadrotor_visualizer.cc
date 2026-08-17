@@ -72,7 +72,7 @@ DEFINE_string(background_model, "models/topoexport_3D_modeling.sdf",
 DEFINE_string(lcm_url,
               "udpm://239.255.76.67:7667?ttl=0",
               "LCM URL for this instance");
-DEFINE_int32(meshcat_port, 7000, "Port for Meshcat server when camera_render=false.");
+DEFINE_int32(meshcat_port, 9000, "Port for Meshcat server when camera_render=false.");
 DEFINE_double(visualizer_publish_rate, 60.0,
               "Meshcat publish rate in Hz when camera_render=false.");
 DEFINE_string(diagram_svg, "", "Path or directory for the system diagram SVG.");

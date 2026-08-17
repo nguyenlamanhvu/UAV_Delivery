@@ -14,3 +14,7 @@ from .lcmt_quadrotor_state import lcmt_quadrotor_state as lcmt_quadrotor_state
 from .lcmt_raruco_detection import lcmt_raruco_detection as lcmt_raruco_detection
 from .lcmt_sim_time import lcmt_sim_time as lcmt_sim_time
 from .lcmt_wind_parameters import lcmt_wind_parameters as lcmt_wind_parameters
+from .lcmt_quadrotor_reference import lcmt_quadrotor_reference as lcmt_quadrotor_reference
+from .lcmt_saved_traj import lcmt_saved_traj as lcmt_saved_traj
+from .lcmt_timestamped_saved_traj import lcmt_timestamped_saved_traj as lcmt_timestamped_saved_traj
+from .lcmt_trajectory_block import lcmt_trajectory_block as lcmt_trajectory_block

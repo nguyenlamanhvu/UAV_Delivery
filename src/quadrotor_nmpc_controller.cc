@@ -1,0 +1,77 @@
+#include <csignal>
+#include <iostream>
+#include <memory>
+#include <utility>
+
+#include <gflags/gflags.h>
+
+#include "drake/common/yaml/yaml_io.h"
+#include "drake/systems/framework/diagram_builder.h"
+#include "drake/systems/lcm/lcm_publisher_system.h"
+#include "drake/systems/lcm/lcm_subscriber_system.h"
+#include "params/quadrotor_params.h"
+#include "systems/diagram_utils.h"
+#include "systems/lcm_driven_loop.h"
+#include "systems/nmpc_controller.h"
+#include "systems/sim_utils.h"
+#include "uav_delivery/lcmt_quadrotor_command.hpp"
+#include "uav_delivery/lcmt_quadrotor_setpoint.hpp"
+#include "uav_delivery/lcmt_quadrotor_state.hpp"
+
+DEFINE_string(config, "config/quadrotor_sim.yaml",
+              "YAML file containing QuadrotorSimParams.");
+DEFINE_string(lcm_url,
+              "udpm://239.255.76.67:7667?ttl=0",
+              "LCM URL for this instance");
+DEFINE_string(diagram_svg, "", "Path or directory for the system diagram SVG.");
+
+namespace uav_delivery {
+namespace {
+
+int DoMain(int argc, char* argv[]) {
+  gflags::ParseCommandLineFlags(&argc, &argv, true);
+  std::signal(SIGINT, systems::HandleSigint);
+
+  const QuadrotorSimParams params =
+      drake::yaml::LoadYamlFile<QuadrotorSimParams>(FLAGS_config);
+  drake::lcm::DrakeLcm lcm(FLAGS_lcm_url);
+
+  drake::systems::DiagramBuilder<double> builder;
+  auto* controller = builder.AddSystem<systems::NmpcController>(params);
+  
+  auto* setpoint_sub = builder.AddSystem(
+      drake::systems::lcm::LcmSubscriberSystem::Make<lcmt_quadrotor_setpoint>(
+          "UAV_NMPC_REFERENCE", &lcm));
+          
+  auto* setpoint_pub = builder.AddSystem(
+      drake::systems::lcm::LcmPublisherSystem::Make<lcmt_quadrotor_setpoint>(
+          params.lcm_channels.setpoint, &lcm,
+          {drake::systems::TriggerType::kForced}));
+
+  builder.Connect(setpoint_sub->get_output_port(), controller->get_input_port(1));
+  builder.Connect(controller->get_output_port(0), setpoint_pub->get_input_port());
+  builder.AddSystem<systems::SimTerminator>();
+
+  std::shared_ptr<drake::systems::Diagram<double>> diagram(builder.Build());
+  systems::MaybeWriteDiagramSvg(*diagram, FLAGS_diagram_svg, argv[0]);
+
+  std::cout << "[CONTROLLER LOG] Quadrotor NMPC Controller config: " << FLAGS_config
+            << "\n";
+  std::cout << "[CONTROLLER LOG] Subscribing state on " << params.lcm_channels.state << "\n";
+  std::cout << "[CONTROLLER LOG] Subscribing setpoint on UAV_NMPC_REFERENCE\n";
+  std::cout << "[CONTROLLER LOG] Publishing command on " << params.lcm_channels.setpoint << "\n";
+  std::cout << "[Controller] Initialization complete! Ready to fly." << std::endl;
+
+  systems::LcmDrivenLoop<lcmt_quadrotor_state> loop(
+      &lcm, diagram, controller, params.lcm_channels.state,
+      true /* force publish once per input state */);
+  loop.Simulate(params.sim_time, []() { return systems::g_stop_requested; });
+  return 0;
+}
+
+}  // namespace
+}  // namespace uav_delivery
+
+int main(int argc, char* argv[]) {
+  return uav_delivery::DoMain(argc, argv);
+}

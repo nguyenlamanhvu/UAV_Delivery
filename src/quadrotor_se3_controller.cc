@@ -58,6 +58,7 @@ int DoMain(int argc, char* argv[]) {
   std::cout << "Subscribing state on " << params.lcm_channels.state << "\n";
   std::cout << "Subscribing setpoint on " << params.lcm_channels.setpoint << "\n";
   std::cout << "Publishing command on " << params.lcm_channels.command << "\n";
+  std::cout << "[Controller] Initialization complete! Ready to fly." << std::endl;
 
   systems::LcmDrivenLoop<lcmt_quadrotor_state> loop(
       &lcm, diagram, controller, params.lcm_channels.state,
