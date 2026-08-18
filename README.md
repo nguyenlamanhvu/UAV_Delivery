@@ -60,6 +60,7 @@ now combines:
   and runtime config.
 
 ## Documentation
+- [Debug GUI Overview](docs/Debug_gui.md)
 - [Tuning, Pre-Run & System Identification](docs/Tuning_and_PreRun.md)
 - [Full Control Architecture: SE(3), NMPC & Wind Model](docs/Architecture_SE3_NMPC_Wind.md)
 
