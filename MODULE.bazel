@@ -7,6 +7,9 @@ bazel_dep(name = "lcm")
 bazel_dep(name = "drake")
 bazel_dep(name = "googletest", version = "1.14.0", repo_name = "com_google_googletest")
 
+bazel_dep(name = "imgui", version = "1.92.6-docking.bcr.1")
+bazel_dep(name = "implot", version = "0.17")
+bazel_dep(name = "glfw", version = "3.4.0.bcr.3")
 system_pkg_config_repository = use_repo_rule(
     "//tools/workspace:pkg_config_repository.bzl",
     "system_pkg_config_repository",

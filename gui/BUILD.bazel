@@ -1,0 +1,69 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "robot_state_adapter",
+    srcs = [
+        "robot_state_adapter.cc",
+    ],
+    hdrs = [
+        "robot_state_adapter.h",
+    ],
+    copts = ["-pthread"],
+    linkopts = ["-pthread"],
+    deps = [
+        "//lcmtypes:uav_lcmtypes",
+        "@lcm//lcm:lcm-static",
+    ],
+)
+
+cc_library(
+    name = "gui_plugins",
+    srcs = [
+        "plugins/docs_plugin.cc",
+        "plugins/map_2d_plugin.cc",
+        "plugins/meshcat_plugin.cc",
+        "plugins/rtsp_plugin.cc",
+    ],
+    hdrs = [
+        "plugins/docs_plugin.h",
+        "plugins/gui_plugin.h",
+        "plugins/map_2d_plugin.h",
+        "plugins/meshcat_plugin.h",
+        "plugins/rtsp_plugin.h",
+        "plugins/stb_image.h",
+    ],
+    deps = [
+        ":robot_state_adapter",
+        "@gstreamer//:gstreamer",
+        "@imgui//:imgui",
+        "@implot//:implot",
+    ],
+)
+
+cc_library(
+    name = "signal_workspace",
+    srcs = ["signal_workspace.cc"],
+    hdrs = ["signal_workspace.h"],
+    deps = [
+        ":robot_state_adapter",
+        ":gui_plugins",
+        "@imgui//:imgui",
+        "@implot//:implot",
+    ],
+)
+
+cc_binary(
+    name = "simulation_gui",
+    srcs = ["simulation_gui.cc"],
+    tags = ["manual"],
+    deps = [
+        ":robot_state_adapter",
+        ":signal_workspace",
+        "@gflags//:gflags",
+        "@imgui//:imgui",
+        "@imgui//backends:platform-glfw",
+        "@imgui//backends:renderer-opengl3",
+        "@implot//:implot",
+    ],
+)
