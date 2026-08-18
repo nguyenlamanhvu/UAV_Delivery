@@ -33,7 +33,6 @@ cc_library(
     ],
     deps = [
         ":robot_state_adapter",
-        "@gstreamer//:gstreamer",
         "@imgui//:imgui",
         "@implot//:implot",
         "@gstreamer//:gstreamer",
