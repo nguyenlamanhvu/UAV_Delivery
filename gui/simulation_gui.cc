@@ -25,7 +25,7 @@ DEFINE_string(lcm_channels, "",
               "empty discovers compatible channels.");
 DEFINE_string(channel, "",
               "Optional single LCM channel; overrides --lcm_channels.");
-DEFINE_string(transport, "ros2",
+DEFINE_string(transport, "lcm",
               "Robot-state transport: ros2, fastdds, or lcm.");
 DEFINE_string(ros2_topic, "",
               "Optional ROS 2 control_ai_msgs/msg/RobotStates topic override; "
