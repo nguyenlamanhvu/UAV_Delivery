@@ -618,7 +618,6 @@ class SignalWorkspace::Impl {
         if (tab->type == TabType::MAP_2D) tab->plugin = std::make_unique<Map2DPlugin>();
         else if (tab->type == TabType::MESHCAT) tab->plugin = std::make_unique<MeshcatPlugin>();
         else if (tab->type == TabType::RTSP) tab->plugin = std::make_unique<RtspPlugin>();
-        else if (tab->type == TabType::DOCS) tab->plugin = std::make_unique<DocsPlugin>();
         else tab->plugin.reset();
       }
       ImGui::Spacing();
