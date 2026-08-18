@@ -13,10 +13,8 @@ namespace simulation_gui {
 RtspPlugin::RtspPlugin() {
   std::strncpy(url_buffer_, url_.c_str(), sizeof(url_buffer_));
   
-  // Initialize GStreamer once
-  if (!gst_is_initialized()) {
-    gst_init(nullptr, nullptr);
-  }
+  // Initialization is now done in main() for safety
+  // to avoid GLib assertion crashes.
 
   // Create an empty texture
   glGenTextures(1, &texture_id_);
