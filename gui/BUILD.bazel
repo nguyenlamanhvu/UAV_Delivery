@@ -35,7 +35,6 @@ cc_library(
         ":robot_state_adapter",
         "@imgui//:imgui",
         "@implot//:implot",
-        "@gstreamer//:gstreamer",
     ],
 )
 
@@ -48,12 +47,12 @@ cc_library(
         ":gui_plugins",
         "@imgui//:imgui",
         "@implot//:implot",
-        "@gstreamer//:gstreamer",
     ],
 )
 
 cc_binary(
     name = "simulation_gui",
+    linkopts = ["-Wl,--exclude-libs,ALL"],
     srcs = ["simulation_gui.cc"],
     tags = ["manual"],
     deps = [
@@ -64,6 +63,5 @@ cc_binary(
         "@imgui//backends:platform-glfw",
         "@imgui//backends:renderer-opengl3",
         "@implot//:implot",
-        "@gstreamer//:gstreamer",
     ],
 )

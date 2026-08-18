@@ -1,6 +1,5 @@
 // Live robot-state plots for simulation and AI debugging.
 
-#include <gst/gst.h>
 #include <cstdio>
 #include <sstream>
 #include <string>
@@ -184,7 +183,6 @@ int DoMain() {
 }  // namespace dairlib
 
 int main(int argc, char* argv[]) {
-  gst_init(&argc, &argv);
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   return dairlib::DoMain();
 }
